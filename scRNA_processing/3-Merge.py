@@ -86,7 +86,7 @@ def main():
     
     tissue = sys.argv[1]
     merge_list = sys.argv[2]
-    root_dir = f'/storage/yangjianLab/chenchang/scRNA/{tissue}/h5ad/'
+    root_dir = f'/path/to/your/project/{tissue}/h5ad/'
     
     # Load sample information
     h5ad_files, sample_names = load_sample_paths(f'{root_dir}/{merge_list}')
@@ -107,7 +107,7 @@ def main():
     merged_adata = ad.concat(adatas, join='outer', index_unique=None)
     
     # Save the merged result
-    output_path = f'/storage/yangjianLab/chenchang/scRNA/{tissue}/h5ad_merge/{tissue}_merged_{merge_list}.h5ad'
+    output_path = f'/path/to/your/project/{tissue}/h5ad_merge/{tissue}_merged_{merge_list}.h5ad'
     print(f"Writing merged data to {output_path}")
     merged_adata.write_h5ad(output_path)
     

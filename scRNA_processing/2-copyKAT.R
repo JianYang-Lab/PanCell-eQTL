@@ -40,9 +40,9 @@ tissue <- args[1]
 sample_name <- args[2]  # example: PRJNA782639_TD1; PRJNA634159_SRR11821880
 
 # Define paths and settings ---------------------------------------
-h5ad_dir <- paste0("/storage/yangjianLab/chenchang/scRNA/",tissue,"/h5ad/")
+h5ad_dir <- paste0("/path/to/your/project/",tissue,"/h5ad/")
 
-output_dir <- paste0("/storage/yangjianLab/chenchang/scRNA/",tissue,"/h5ad_merge/tumor_copykat_prediction")
+output_dir <- paste0("/path/to/your/project/",tissue,"/h5ad_merge/tumor_copykat_prediction")
 
 h5ad_file <- file.path(h5ad_dir, paste0(sample_name, "_rawQC.h5ad"))
 

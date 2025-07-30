@@ -38,7 +38,7 @@ def load_and_prepare_data(tissue, hvg_suffix):
     """
     print("Loading and preparing data...")
 
-    file_path = f"/storage/yangjianLab/chenchang/scRNA/{tissue}/h5ad_merge/{tissue}_merged_rawQC_{hvg_suffix}.h5ad"
+    file_path = f"/path/to/your/project/{tissue}/h5ad_merge/{tissue}_merged_rawQC_{hvg_suffix}.h5ad"
     adata = sc.read_h5ad(file_path)
 
     print(f'Number of cells: {adata.shape[0]}')

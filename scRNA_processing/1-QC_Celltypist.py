@@ -222,7 +222,7 @@ def main():
     platform = sys.argv[2]
     
     # Set working directory
-    os.chdir(f"/storage/yangjianLab/chenchang/scRNA/{tissue}/raw_data")
+    os.chdir(f"/path/to/your/project/{tissue}/raw_data")
 
     
     print("Loading data...")
@@ -321,7 +321,7 @@ def main():
     
     # Save results
     print("Writing output file...")
-    sample_h5ad_out = f"/storage/yangjianLab/chenchang/scRNA/{tissue}/h5ad/{project}_{sample}_rawQC.h5ad"
+    sample_h5ad_out = f"/path/to/your/project/{tissue}/h5ad/{project}_{sample}_rawQC.h5ad"
 
     adata.write_h5ad(sample_h5ad_out)
     
