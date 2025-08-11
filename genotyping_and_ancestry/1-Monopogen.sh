@@ -68,7 +68,6 @@ if [ ! -d "${PROJECT_PATH}" ]; then
 fi
 
 # --- Environment Setup ---
-
 echo "--- Setting up environment ---"
 module load samtools
 export LD_LIBRARY_PATH="${MONOPOGEN_PATH}/apps:${LD_LIBRARY_PATH}"

@@ -15,19 +15,14 @@
 # Load required libraries -----------------------------------------
 
 suppressPackageStartupMessages({
-
   library(reticulate)
-
   library(Seurat)
-
   library(anndata)
   library(copykat)
 })
 
 # Setup Python environment ----------------------------------------
-
 use_condaenv('scanpy_env')
-
 sc <- import("scanpy")
 
 # Parse command line arguments ------------------------------------
@@ -54,7 +49,6 @@ reference_cell_types <- c(
   'Classical monocytes', 'DC1', 'DC2', 'Migratory DCs', 'Mast cells',
   'Monocyte-derived Mph', 'NK cells', 'Non-classical monocytes', 
   'Plasma cells', 'Plasmacytoid DCs', 'T cells proliferating'
-
 )
 
 # Load and process data ------------------------------------------
@@ -67,15 +61,12 @@ message("Converting to Seurat object...")
 counts <- Matrix::Matrix(t(as.matrix(h5ad$X)), sparse = TRUE)
 seurat_obj <- CreateSeuratObject(counts, meta.data = h5ad$obs)
 rownames(seurat_obj) <- rownames(counts)
-
 colnames(seurat_obj) <- colnames(counts)
 
 # Clean up metadata
-
 seurat_obj@meta.data <- seurat_obj@meta.data[, !colnames(seurat_obj@meta.data) %in% "barcode"]
 
 # Get normal cells for reference
-
 message("Identifying reference cells...")
 normal_cell_names <- colnames(seurat_obj)[seurat_obj@meta.data[, "celltypist_pred"] %in% reference_cell_types]
 
@@ -86,29 +77,22 @@ if (length(normal_cell_names) == 0) {
 
 # Run CopyKAT ---------------------------------------------------
 message("Running CopyKAT analysis...")
-
 setwd(output_dir)
 
 # Prepare count matrix
-
 exp_matrix <- as.matrix(seurat_obj@assays$RNA$counts)
 
 # Execute CopyKAT
 copykat_results <- copykat(
   rawmat = exp_matrix, 
-
   id.type = "S", 
   ngene.chr = 5, 
-
   win.size = 25, 
   KS.cut = 0.1,
-
   sam.name = sample_name, 
   distance = "euclidean", 
   norm.cell.names = normal_cell_names,
-
   output.seg = FALSE, 
-
   plot.genes = TRUE, 
   genome = "hg20", 
   n.cores = 4

@@ -28,51 +28,36 @@ from celltypist import models
 
 def is_outlier(adata, metric, nmads):
     """Detect outliers based on median absolute deviation."""
-
     M = adata.obs[metric]
     outlier = (M < np.median(M) - nmads * median_abs_deviation(M)) | (
-
         np.median(M) + nmads * median_abs_deviation(M) < M
-
     )
     return outlier
 
 def calculate_expected_doublet_rate(ncell):
     """Calculate expected doublet rate based on number of cells."""
-
     if ncell < 500:
-
         return 0.004
-
     elif ncell < 1000:
         return 0.004
-
     elif ncell < 2000:
         return 0.008
     elif ncell < 3000:
         return 0.016
-
     elif ncell < 4000:
         return 0.023
-
     elif ncell < 5000:
         return 0.031
     elif ncell < 6000:
-
         return 0.039
     elif ncell < 7000:
-
         return 0.046
-
     elif ncell < 8000:
         return 0.054
     elif ncell < 9000:
-
         return 0.061
     elif ncell < 10000:
-
         return 0.069
-
     else:
         return 0.076
 
@@ -218,61 +203,48 @@ def main():
 
     # Parse command line arguments
     tissue = sys.argv[1]
-
     platform = sys.argv[2]
     
     # Set working directory
     os.chdir(f"/path/to/your/project/{tissue}/raw_data")
 
-    
     print("Loading data...")
 
     adata, project, sample = load_data(platform, *sys.argv[3:])
 
     print(f"Platform: {platform}; Project: {project}; Sample: {sample}")
-
     
     # Basic filtering
 
     print("Performing quality control filtering...")
     sc.pp.filter_cells(adata, min_genes=200)
-
     sc.pp.filter_genes(adata, min_cells=3)
 
-    
     # Annotate mitochondrial genes
     adata.var["mt"] = adata.var_names.str.startswith("MT-")
     #adata.var["rb"] = adata.var_names.str.startswith(("RPS","RPL"))
     #adata.var["hb"] = adata.var_names.str.startswith(("^HB[^(P)]"))
     
     sc.pp.calculate_qc_metrics(
-
         adata, qc_vars=["mt"], percent_top=[20], log1p=True, inplace=True
-
     )
     
     # Detect outliers
-
     adata.obs["outlier"] = (
-
         is_outlier(adata, "log1p_total_counts", 5) | 
         is_outlier(adata, "log1p_n_genes_by_counts", 5)
     )
     adata.obs.outlier.value_counts()
-
     
     adata.obs["mt_outlier"] = is_outlier(adata, "pct_counts_mt", 5) | (
-
         adata.obs["pct_counts_mt"] > 20
     )
     adata.obs.mt_outlier.value_counts()
     
     print(f"Total number of cells: {adata.n_obs}")
-
     adata = adata[(~adata.obs.outlier) & (~adata.obs.mt_outlier)].copy()
-
     print(f"Number of cells after filtering low-quality cells: {adata.n_obs}")
-    
+
     # Doublet detection using scrublet
     print("Detecting doublets...")
     ncell = adata.shape[0]
@@ -281,7 +253,6 @@ def main():
     scrub = scr.Scrublet(adata.X, expected_doublet_rate=dbrate)
 
     doublet_scores, predicted_doublets = scrub.scrub_doublets(
-
         min_counts=2, 
         min_cells=3, 
         min_gene_variability_pctl=85, 
@@ -307,11 +278,9 @@ def main():
     sc.pp.normalize_total(adata_celltypist, target_sum=1e4)
     sc.pp.log1p(adata_celltypist)
 
-    
     # Make .X dense for compatibility with celltypist
     adata_celltypist.X = adata_celltypist.X.toarray()
 
-    
     # Load appropriate model for tissue
     #models.download_models(model=["Human_Lung_Atlas"])
     model = models.Model.load(model="Human_Lung_Atlas.pkl")
