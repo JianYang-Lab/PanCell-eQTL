@@ -11,7 +11,6 @@
 # - Figure 4: Replication and concordance with external datasets (OneK1K, GTEx).
 # - Figure 5: Visualization of mashR results for eQTL sharing.
 #
-# This is a complete, runnable script organized from the original Rmd file.
 #
 ################################################################################
 
@@ -107,8 +106,7 @@ for (t in tissue_list) {
 
 ts_ct_anc <- read_delim("metadata/tissue_celltype_ancestry_ss_new.txt", delim = '\t') %>% distinct()
 
-smr_list_all <- list_rbind(smr_list) %>%
-  filter(!(tissue == "Blood" & cell_type %in% c("T", "B", "Eryth"))) %>%
+smr_list_all <- list_rbind(smr_list) %>% 
   left_join(ts_ct_anc, by = c("tissue", "cell_type", "ancestry")) %>%
   filter(sample_size >= 50) %>%
   inner_join(cell_type_cat_colors, by = c("tissue", "cell_type")) %>%
@@ -220,7 +218,7 @@ get_significant_top_results_new <- function(lfsr, all_pair, thresh = 0.05, condi
   return(top)
 }
 
-get_pairwise_sharing_scatter_plot <- function(pm, lfsr, pair, pairs, output_dir, factor = 0.5, lfsr_thresh = 0.05, FUN = identity) {
+get_pairwise_sharing_scatter_plot <- function(pm, lfsr, pair, pairs, output_dir, lfsr_thresh = 0.05, FUN = identity) {
   col1 <- pairs[1]
   col2 <- pairs[2]
   i <- which(colnames(pm) == col1)
@@ -631,15 +629,14 @@ ht_opt$ANNOTATION_LEGEND_PADDING <- unit(4, "cm")
 
 for (tissue in tissue_list[1]){
     print(tissue)
-    m.pairwise_PM <- readRDS(paste0("crossTissue_analysis/mashR/v9/step6_pairwise_PM_all_pairwisetop_",tissue,".rds"))
-    #m.pairwise_PM <- readRDS(paste0("crossTissue_analysis/mashR/v9/step5_pairwise_PM_",tissue,".rds"))
+    m.pairwise_PM <- readRDS(file.path(mashr_intra_tissue_dir, paste0("step6_pairwise_PM_all_pairwisetop_", tissue, ".rds")))
+
     ct_anc_grid=expand.grid(celltypes_all_list[[tissue]],ancestries_all_list[[tissue]])
     colnames(ct_anc_grid) = c("cell_type","ancestry")
     ct_anc_grid = ct_anc_grid %>% 
         dplyr::left_join(smr_list_all[smr_list_all$tissue == tissue,] %>% dplyr::select(cell_type,ancestry,lineage,cell_type_short,cell_type_colors,sample_size, total_count, neGenes, neQTLs)%>%distinct(),by=c("ancestry","cell_type")) %>% 
         dplyr::mutate(ct_anc = paste0(cell_type,"_",ancestry), ct_anc1 = paste0(cell_type_short,"_",ancestry)) %>% 
-        dplyr::filter(ct_anc %in% rownames(m.pairwise_PM) & !is.na(cell_type_short)) %>% 
-        dplyr::filter(!(tissue=="Skin" & ancestry=="EAS"))
+        dplyr::filter(ct_anc %in% rownames(m.pairwise_PM) & !is.na(cell_type_short))
 
     m.pairwise_PM = m.pairwise_PM[rownames(m.pairwise_PM) %in% ct_anc_grid$ct_anc, rownames(m.pairwise_PM) %in% ct_anc_grid$ct_anc] 
     m.pairwise_PM = m.pairwise_PM[ct_anc_grid$ct_anc,ct_anc_grid$ct_anc]
@@ -790,7 +787,7 @@ for (tissue in tissue_list[1]){
 
     legend_heatmap = create_legend(title = "Pairwise sharing (%)",col_fun = col_fun)
 
-    draw(h, heatmap_legend_side = "right", annotation_legend_side = "right" , merge_legend = TRUE, legend_gap = unit(nrow(m.pairwise_PM)/10, "cm"), annotation_legend_list = list(legend_sample_size, legend_cell_count, legend_eGenes,legend_eQTLs, legend_lineage, legend_heatmap)) # optionally combine them into one list 
+    draw(h, heatmap_legend_side = "right", annotation_legend_side = "right" , merge_legend = TRUE, legend_gap = unit(nrow(m.pairwise_PM)/10, "cm"), annotation_legend_list = list(legend_sample_size, legend_cell_count, legend_eGenes,legend_eQTLs, legend_lineage, legend_heatmap)) 
 
     dev.off()
 }

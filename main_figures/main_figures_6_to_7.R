@@ -51,8 +51,8 @@ dir.create(tmp_dir, showWarnings = FALSE, recursive = TRUE)
 smr_coloc_results_dir <- file.path(base_dir, "smr_coloc_results/")
 metadata_dir <- file.path(base_dir, "metadata/")
 gwas_lists_dir <- file.path(base_dir, "gwas_lists/") # Centralize GWAS list paths
-ref_data_dir <- file.path(base_dir, "reference_data/") # Path to reference genotypes (e.g., 1000G)
-besd_data_dir <- file.path(base_dir, "besd_summaries/") # Path to BESD summary stats
+ref_dir <- file.path(base_dir, "reference_data/") # Path to reference genotypes (e.g., 1000G)
+besd_dir <- file.path(base_dir, "besd_summaries/") # Path to BESD summary stats
 
 # Path to the SMR executable
 smr_executable <- "/path/to/smr-1.3.1-linux-x86_64/smr"
@@ -60,8 +60,73 @@ smr_executable <- "/path/to/smr-1.3.1-linux-x86_64/smr"
 # --- 1.4: Load and Process Global Metadata ---
 tissue_list <- c("Blood", "Lung", "Skin", "Colon", "Liver")
 ancestry_list <- c("EUR", "EAS", "AFR", "AMR")
-cell_type_cat_colors <- read_delim("metadata/cell_type_colors_new.txt", delim = '\t')
-gene_bed_path <- file.path(base_dir, "path/to/your/gene_annotation.bed")
+ancestry_color_list <- c(EUR = "#66C2A5", EAS = "#FC8D62", AFR = "#8DA0CB", AMR = "#E78AC3")
+
+ancestries_all_list <- list(
+  Blood = c("EUR", "EAS", "AFR", "AMR"), Lung = c("EUR", "EAS"), Skin = c("EUR"),
+  Colon = c("EUR"), Liver = c("EUR", "EAS")
+)
+
+celltypes_all_list <- list(
+  Blood = c('CD4TNC','CD4TEM','Treg','CD8TNC','CD8TEM','CD8TEMRA','MAIT','NKp','NKn','BIN','BMem','Plasma','Plasmablasts','MonoC','MonoNC','Nph','DC','pDC'),
+  Liver = c('CD4T',"CD8T","Treg","MAIT","Th","gdT",'Circulating_NK','Resident_NK','B','Plasma','Monocytes','Macrophages','DC','pDC','Neutrophils','Basophils','Hepatocytes','Cholangiocytes','Endothelium','Fibroblasts'),
+  Skin = c("Th","Tc", "Treg","NK","DC1","DC2","MigDC","Macro1","Macro2","MonoMac","Mast","KCdiff","KCundiff","Melanocyte","VE1","VE2","VE3","LE1","Pericyte1","Pericyte2","F2"),
+  Lung = c("CD4T","CD8T","NK","B","Monocytes","Mast","Macrophages","DC","AT1","AT2","Airway_Epi_Multiciliated","Airway_Epi_Basal","Airway_Epi_Secretory","EC_arterial","EC_capillary","EC_venous","LEC_mature","LEC_diff","Fibroblasts","Smooth_muscle","Mesothelium","Rare"),
+  Colon = c("CD4T","CD8T","Treg","Th","gdT","NKT","NK","ILC3","BIN","BMem","Bcyc","Plasma","Mono","Macro","cDC2","Mast","Colonocyte","GLoblet","Tuft","TA", "EEC" ,"ECcap","ECven","Stromal1","Stromal2","Myofibroblast","Glia")
+)
+
+# Load cell type color and category information
+cell_type_cat_colors <- read_delim(file.path(metadata_dir,"cell_type_colors_new.txt"), delim = '\t') %>%
+  mutate(lineage = case_when(
+    cell_type_category == "T cells" ~ "Immune Lymphoid",
+    cell_type_category == "B cells" ~ "Immune Lymphoid",
+    cell_type_category == "ILC" ~ "Immune Lymphoid",
+    cell_type_category == "Myeloid" ~ "Immune Myeloid",
+    cell_type_category == "Endothelial" ~ "Endothelial",
+    cell_type_category == "Epithelial" ~ "Epithelial",
+    cell_type_category == "Fibroblasts/muscle cells" ~ "Mesenchymal",
+    cell_type == "Mesothelium" ~ "Mesenchymal",
+    .default = "Other"
+  ))
+
+# Create dictionaries for cell type names and colors
+cell_type_short_dict <- lapply(tissue_list, function(x) {
+  tmp <- cell_type_cat_colors$cell_type_short[cell_type_cat_colors$tissue == x]
+  names(tmp) <- cell_type_cat_colors$cell_type[cell_type_cat_colors$tissue == x]
+  tmp[celltypes_all_list[[x]]]
+})
+names(cell_type_short_dict) <- tissue_list
+cell_type_color_dict <- cell_type_cat_colors$cell_type_colors
+names(cell_type_color_dict) <- cell_type_cat_colors$cell_type_short
+lineage_colors <- c(`Immune Lymphoid` = "#8AB9D8", `Immune Myeloid` = "#e5a03d", Epithelial = "#8d4c28", Endothelial = "#b84e3c", Mesenchymal = "#c76b85", Other = "#c3e0e5")
+
+# Load and process summary statistics to define high-quality conditions
+smr_list <- list()
+for (t in tissue_list) {
+  smr_file <- file.path(t, "sc-eQTL/results/sig/eQTL_summary_5en8_maf01.tsv")
+  if(file.exists(smr_file)){
+    smr <- read_table(smr_file) %>% distinct()
+    smr$tissue <- t
+    smr_list[[t]] <- smr
+  }
+}
+
+ts_ct_anc <- read_delim(file.path(metadata_dir,"tissue_celltype_ancestry_ss_new.txt"), delim = '\t') %>% distinct()
+
+smr_list_all <- list_rbind(smr_list) %>%
+  left_join(ts_ct_anc, by = c("tissue", "cell_type", "ancestry")) %>%
+  filter(sample_size >= 50) %>%
+  inner_join(cell_type_cat_colors, by = c("tissue", "cell_type")) %>%
+  mutate(
+    ancestry = factor(ancestry, levels = ancestry_list),
+    ct_anc = paste0(cell_type_short, "-", ancestry),
+    total_count = round(sample_size * mean_count)
+  ) %>%
+  distinct() %>%
+  filter(total_count > 10000) %>%
+  rename(neGenes = neGenes_5en8, neQTLs = neQTLs_5en8) %>%
+  filter(!(tissue == "Skin" & ancestry == "EAS"))
+gene_bed_path <- file.path(metadata_dir, "genes.bed")
 gene_bed <- fread(gene_bed_path)
 
 ## 2. HELPER FUNCTIONS
@@ -69,11 +134,11 @@ gene_bed <- fread(gene_bed_path)
 print("--- Section 2: Defining Helper Functions ---")
 
 # Helper function to query and process eQTL data
-query_eqtl_data <- function(prefix, probe, besd_dir, tmp_dir, smr_exec) {
+query_eqtl_data <- function(prefix, probe, besd_dir, tmp_dir, smr_executable) {
     output_file <- file.path(tmp_dir, paste0(prefix, "_", probe, ".txt"))
     if (!file.exists(output_file)) {
         command <- paste(
-            shQuote(smr_exec),
+            shQuote(smr_executable),
             "--beqtl-summary", shQuote(file.path(besd_dir, prefix)),
             "--query 1 --probe", probe,
             "--out", shQuote(file.path(tmp_dir, paste0(prefix, "_", probe)))
@@ -104,7 +169,7 @@ select_gwas_snp <- function(gene, snp_ids, GWAS_list, trait, gene_bed, tmp_dir) 
         region_end <- tss_position + 1e6
         
         # NOTE: Assumes dbSNP files are in a specific path. Centralize this path.
-        dbsnp_path <- file.path(ref_data_dir, "dbSNP_b151/split_into_chrAuto/")
+        dbsnp_path <- file.path(ref_dir, "dbSNP_b151/split_into_chrAuto/")
         target_snps_pos_file <- file.path(tmp_dir, "target_snps_pos.txt")
 
         system(sprintf("awk '$2>=%s && $2<=%s {print $1,$2,$3}' %s > %s", region_start, region_end, shQuote(file.path(dbsnp_path, paste0("chr", chromosome, "_variants_hg38_b151.txt"))), shQuote(target_snps_pos_file)))
@@ -336,8 +401,8 @@ draw_locus_plot <- function(query, gene, chr, pos_range, chrom, pos, title, labe
 }
 
 # Helper function for drawing effect plot
-draw_effect_plot <- function(tissue,GWAS_list,trait,probe,gene,chr,ancestry,celltype,title,tmp_dir,cisWindow=2000, r2_threshold=0.1,ref_dir=ref_dir,SMR_path=SMR,besd_dir=besd_dir){
-    if (! file.exists(file.path(tmp_dir,"./plot/",trait,"_",tissue,"_",ancestry,"_",celltype,".",probe,".txt"))){
+draw_effect_plot <- function(tissue,GWAS_list,trait,probe,gene,chr,ancestry,celltype,title,tmp_dir,ref_dir=ref_dir,SMR_path=smr_executable,besd_dir=besd_dir,cisWindow=2000, r2_threshold=0.1){
+    if (! file.exists(file.path(tmp_dir,"plot",paste0(trait,"_",tissue,"_",ancestry,"_",celltype,".",probe,".txt")))){
         gwas_path=GWAS_list[GWAS_list$X1==trait,]$X4[1]
         if (grepl("\\.gz$", gwas_path)) {
             gwas_local=file.path(tmp_dir,str_replace(basename(gwas_path),".gz",""))
@@ -346,10 +411,10 @@ draw_effect_plot <- function(tissue,GWAS_list,trait,probe,gene,chr,ancestry,cell
             gwas_local = gwas_path
         }
         refdata=file.path(ref_dir,ancestry,paste0("1KGP_",ancestry,"_chr",chr,"_maf01_mind05_hwe1en6_msite05_hg38"))
-        command=paste0(SMR_path," --bfile ", refdata, " --gwas-summary ", gwas_local, " --beqtl-summary ", ifelse(celltype=="GTEx_Lung",paste0(besd_dir,"/Lung_eQTL_all_chr",chr),paste0(besd_dir,"/",tissue,"_",celltype,"_",ancestry,"_sceQTL")), " --out ", trait,"_",tissue,"_",ancestry,"_",celltype, " --plot --probe ", probe, " --probe-wind 500 --gene-list resource/glist-hg38 --diff-freq-prop 0.5")
+        command=paste0(SMR_path," --bfile ", refdata, " --gwas-summary ", gwas_local, " --beqtl-summary ", ifelse(celltype=="GTEx_Lung",paste0(besd_dir,"/Lung_eQTL_all_chr",chr),paste0(besd_dir,"/",tissue,"_",celltype,"_",ancestry,"_sceQTL")), " --out ", trait,"_",tissue,"_",ancestry,"_",celltype, " --plot --probe ", probe, " --probe-wind 500 --gene-list paste0(metadata_dir, "glist-hg38") --diff-freq-prop 0.5")
         system(command)
     }
-    SMRdata=ReadSMRData(file.path(tmp_dir,"./plot/",trait,"_",tissue,"_",ancestry,"_",celltype,".",probe,".txt"))
+    SMRdata=ReadSMRData(file.path(tmp_dir,"plot",paste0(trait,"_",tissue,"_",ancestry,"_",celltype,".",probe,".txt")))
     p <- SMREffectggPlot(data=SMRdata, title=title,cisWindow=cisWindow, transWindow=5000, pointsize=8, r2_threshold=0.1)
     return(p)
 }
@@ -357,27 +422,25 @@ draw_effect_plot <- function(tissue,GWAS_list,trait,probe,gene,chr,ancestry,cell
 ## 3. FIGURE 6: GWAS INTEGRATION FOR BLOOD (EAS)
 # ------------------------------------------------------------------------------
 print("--- Section 3: Generating Figure 6 - Blood (EAS) ---")
-flog.info("Starting Figure 6 generation for Blood (EAS).")
 
 # --- 3.1: Load and Pre-filter SMR/COLOC Results ---
 gwas_list_eas <- read_delim(file.path(gwas_lists_dir, "GWAS_EAS_list.txt"), col_names = FALSE, delim = '\t')
 
-smr_results_eas_filtered <- readRDS(file.path(smr_coloc_results_dir, "Blood_smr_results.rds"))$smr_results1 %>%
+smr_results_eas <- readRDS(file.path(smr_coloc_results_dir, "Blood_smr_results.rds"))$smr_results1 %>%
     filter(p_SMR_bhadj < 0.05, p_HEIDI > 0.05)
-coloc_results_eas_filtered <- readRDS(file.path(smr_coloc_results_dir, "Blood_coloc_results.rds"))$coloc_results1 %>%
+coloc_results_eas <- readRDS(file.path(smr_coloc_results_dir, "Blood_coloc_results.rds"))$coloc_results1 %>%
     filter(pp4 > 0.8)
 
-smr_results_eur_filtered <- readRDS(file.path(smr_coloc_results_dir, "Blood_smr_results.rds"))$smr_results2 %>%
+smr_results_eur <- readRDS(file.path(smr_coloc_results_dir, "Blood_smr_results.rds"))$smr_results2 %>%
     filter(p_SMR_bhadj < 0.05, p_HEIDI > 0.05)
-coloc_results_eur_filtered <- readRDS(file.path(smr_coloc_results_dir, "Blood_coloc_results.rds"))$coloc_results2 %>%
+coloc_results_eur <- readRDS(file.path(smr_coloc_results_dir, "Blood_coloc_results.rds"))$coloc_results2 %>%
     filter(pp4 > 0.8)
 
 trait_list <- c("CD", "IBD", "RA", "SLE", "Asthma", "AR", "COPD")
 
 # --- 3.2: Gene-Trait-Celltype Heatmap (Scatterpie) ---
-flog.info("Generating Scatterpie heatmap for Blood (EAS).")
-smr_coloc_eas <- smr_results_eas_filtered %>%
-    inner_join(coloc_results_eas_filtered %>% filter(pp4 > 0.9), by = c("trait", "celltype", "Gene")) %>%
+smr_coloc_eas <- smr_results_eas %>%
+    inner_join(coloc_results_eas %>% filter(pp4 > 0.9), by = c("trait", "celltype", "Gene")) %>%
     mutate(trait = factor(trait, levels = trait_list))
 
 trait_matrix_eas <- smr_coloc_eas %>%
@@ -515,9 +578,9 @@ anc <- "EAS"
 tr <- "SLE"
 
 # Find intersecting cell types efficiently
-intersecting_celltypes <- smr_results_eas_filtered %>%
+intersecting_celltypes <- smr_results_eas %>%
     filter(trait == tr, Gene == gene) %>%
-    inner_join(coloc_results_eas_filtered, by = c("trait", "celltype", "Gene")) %>%
+    inner_join(coloc_results_eas, by = c("trait", "celltype", "Gene")) %>%
     pull(celltype) %>%
     unique()
     
@@ -529,7 +592,7 @@ leadsnp <- gwas_target[which.min(p)]$SNP
 ld_file <- file.path(tmp_dir, paste0("Blood_", anc, "_", leadsnp, ".ld"))
 
 if (!file.exists(ld_file)) {
-    plink_bfile <- file.path(base_dir, "Blood/sc-eQTL/genotype/Blood_", anc, "_indivpruned_updated")
+    plink_bfile <- file.path(base_dir, paste0("Blood/sc-eQTL/genotype/Blood_", anc, "_indivpruned_updated"))
     system(paste0("plink --bfile ", shQuote(plink_bfile), " --ld-snp ", leadsnp, " --ld-window-kb 1000 --ld-window 99999 --ld-window-r2 0 --r2 --out ", shQuote(file.path(tmp_dir, paste0("Blood_", anc, "_", leadsnp)))))
 }
 ld <- fread(ld_file)
@@ -607,8 +670,6 @@ for (c in celltypes[1:length(celltypes)]) {
             if (!file.exists(paste0("Blood_",a,"_", leadsnp_tmp,".ld"))){
                 tryCatch({
                 system(paste0("plink --bfile Blood/sc-eQTL/genotype/Blood_",a,"_indivpruned_updated --ld-snp ", leadsnp_tmp, " --ld-window-kb 1000 --ld-window 99999 --ld-window-r2 0 --r2 --out Blood_",a,"_", leadsnp_tmp))
-                #ref_bfile = file.path(base_dir,paste0("resource/1000G/1KGP3_3202_GRCh38/", a, "/1kGP_high_coverage_Illumina.chr",chr,".filtered.QCed.maf01.rmDup.",a))
-                #system(paste0("plink --bfile ",ref_bfile, " --ld-snp ", leadsnp_tmp, " --ld-window-kb 1000 --ld-window 99999 --ld-window-r2 0 --r2 --out ref_",a,"_", leadsnp_tmp))
                 }, error=function(e){message("No valid variant")})
             }
             if (file.exists(paste0("ref_",a,"_", leadsnp_tmp,".ld"))){
@@ -632,7 +693,7 @@ for (c in celltypes[1:length(celltypes)]) {
 }
 
 
-if(!file.exists(file.path(output_dir, "fig6_locusplot_locusplot_",tissue,"_",anc,"_", tr, "_", gene, "_no_label.png"))){
+if(!file.exists(file.path(output_dir, paste0("fig6_locusplot_locusplot_",tissue,"_",anc,"_", tr, "_", gene, "_no_label.png")))){
 
         # Create the GWAS locus plot with error handling
         pg <- tryCatch({
@@ -690,7 +751,7 @@ if(!file.exists(file.path(output_dir, "fig6_locusplot_locusplot_",tissue,"_",anc
             # Plot and save the combined figure
             plot_grid(plotlist = plot_list, ncol = ifelse(length(plot_list)>5,2,1), align = "v", rel_heights=c(rep(1,ceiling(length(plot_list)/2)-1),1.15))
             ggsave(
-            filename = file.path(output_dir, "fig6_locusplot_locusplot_",tissue,"_",anc,"_", tr, "_", gene, "_no_label.png"),
+            filename = file.path(output_dir, paste0("fig6_locusplot_locusplot_",tissue,"_",anc,"_", tr, "_", gene, "_no_label.png")),
             width = ifelse(length(plot_list)>5,10,5), height = ceiling(length(plot_list)/2)*3
             )
         } else {
@@ -701,10 +762,8 @@ if(!file.exists(file.path(output_dir, "fig6_locusplot_locusplot_",tissue,"_",anc
 ## 4. FIGURE 7: GWAS INTEGRATION FOR LUNG (EUR)
 # ------------------------------------------------------------------------------
 print("--- Section 4: Generating Figure 7 - Lung (EUR) ---")
-setwd(tmp_dir)
-
 # --- 4.1: Load SMR/COLOC Results ---
-trait_list <- c("IPF","COPD","CPD","LuC","COVID19-HGI-A2", "COVID19-HGI-B1", "COVID19-HGI-B2", "COVID19-HGI-C2", "CAD","SBP","DBP","AFib","Pleurisy","Bronchiectasis","Chronic Bronchitis","Bronchitis","Chronic Sinusitis","Ped_asthma","Asthma","Pneumoconiosis","Pneumonia","Pneumothorax","PTB","SAS","Tonsillitis")
+trait_list <- c("IPF","COPD","CPD","LuC","COVID19-HGI-A2", "COVID19-HGI-B1", "COVID19-HGI-B2", "COVID19-HGI-C2", "CAD","Pleurisy","Bronchiectasis","Chronic Bronchitis","Bronchitis","Chronic Sinusitis","Ped_asthma","Asthma","Pneumoconiosis","Pneumonia","Pneumothorax","PTB","SAS","Tonsillitis")
 
 colors <-  c("dodgerblue", "firebrick", "forestgreen", "gold", "darkorchid",
               "orange", "darkturquoise", "deeppink", "limegreen", "navy",
@@ -733,10 +792,10 @@ smr_results <- smr_results %>% dplyr::filter(p_SMR_bhadj<0.05 & p_HEIDI>0.05)
 coloc_results <- coloc_results %>% dplyr::filter(pp4>0.8)
 
 # --- 4.2: Gene-Trait-Celltype Heatmap (Scatterpie) ---
-smr_coloc <- smr_results %>% inner_join(coloc_results %>% dplyr::filter(pp4>0.9), by=c("tissue","trait","celltype","Gene","cell_type_short")) %>% dplyr::filter(celltype != "GTEx_Lung" & !trait %in% c("SBP","DBP")) %>% dplyr::mutate(cell_type_short=factor(cell_type_short,levels=c(unique(c(cell_type_short_dict[['Blood']],cell_type_short_dict[['Lung']])),"GTEx_Lung"))) %>% 
+smr_coloc <- smr_results %>% inner_join(coloc_results %>% dplyr::filter(pp4>0.9), by=c("tissue","trait","celltype","Gene","cell_type_short")) %>% dplyr::filter(celltype != "GTEx_Lung" ) %>% dplyr::mutate(cell_type_short=factor(cell_type_short,levels=c(unique(c(cell_type_short_dict[['Blood']],cell_type_short_dict[['Lung']])),"GTEx_Lung"))) %>% 
 arrange(tissue,cell_type_short) 
 trait_matrix <- smr_coloc %>%
-  filter(celltype != "GTEx_Lung"& !trait %in% c("SBP","DBP")) %>%
+  filter(celltype != "GTEx_Lung") %>%
   dplyr::mutate(trait=factor(trait,levels=trait_list))%>%
   distinct(Gene, trait) %>%          # Remove duplicate gene-trait pairs
   arrange(trait,Gene) %>%
@@ -755,7 +814,7 @@ gene_order <- gene_clusters$labels[gene_clusters$order]         # Extract order
 p_list=list()
 for (ts in c("Lung","Blood")){
 pie_data <- smr_coloc%>% 
-  dplyr::filter(celltype != "GTEx_Lung" & !trait %in% c("SBP","DBP") & tissue==ts) %>%
+  dplyr::filter(celltype != "GTEx_Lung" & tissue==ts) %>%
   count(tissue,cell_type_short, Gene, trait) %>% 
   dplyr::mutate(trait=factor(trait,levels=trait_list),
         cell_type_short=factor(cell_type_short, levels=cell_type_short_dict[[ts]][cell_type_short_dict[[ts]] %in% smr_results$cell_type_short])) %>% 
@@ -812,11 +871,11 @@ ggsave(file.path(output_dir, "fig7_smr_coloc_lung_blood_heatmap.png"), width=12,
 
 # --- 4.3: eGene Count Comparison & Overlap ---
 smr_coloc_negene <- rbind(
-smr_results %>% dplyr::filter(tissue=="Lung" & celltype!="GTEx_Lung" & !trait %in% c("SBP","DBP")) %>%
+smr_results %>% dplyr::filter(tissue=="Lung" & celltype!="GTEx_Lung" ) %>%
   group_by(cell_type_short) %>% 
   reframe(nGenes = n_distinct(Gene), method="SMR") %>% 
   dplyr::mutate(cell_type_short=factor(cell_type_short,levels=c(cell_type_short_dict[["Lung"]][celltypes_all_list[["Lung"]]],"GTEx_Lung"))) ,
-coloc_results %>% dplyr::filter(tissue=="Lung" & celltype!="GTEx_Lung"& !trait %in% c("SBP","DBP")) %>%
+coloc_results %>% dplyr::filter(tissue=="Lung" & celltype!="GTEx_Lung") %>%
   group_by(cell_type_short) %>% 
   reframe(nGenes = n_distinct(Gene),method="COLOC") %>% 
   dplyr::mutate(cell_type_short=factor(cell_type_short,levels=c(cell_type_short_dict[["Lung"]][celltypes_all_list[["Lung"]]],"GTEx_Lung")))
@@ -835,9 +894,9 @@ smr_coloc_negene %>%
         strip.background=element_rect(color="white",fill="white"),
         legend.position="none", 
         panel.grid.major.y=element_line(linetype="dashed"))
-ggsave(file.path(output_dir, "fig7_smr_coloc_lung_negene_counts.png"), ,width=5,height=4)
+ggsave(file.path(output_dir, "fig7_smr_coloc_lung_negene_counts.png"),width=5,height=4)
 
-smr_coloc <- smr_results %>% inner_join(coloc_results, by=c("tissue","trait","celltype","Gene","cell_type_short")) %>% dplyr::filter(celltype != "GTEx_Lung" & !trait %in% c("SBP","DBP")) %>% dplyr::mutate(cell_type_short=factor(cell_type_short,levels=c(unique(c(cell_type_short_dict[['Blood']],cell_type_short_dict[['Lung']])),"GTEx_Lung"))) %>% 
+smr_coloc <- smr_results %>% inner_join(coloc_results, by=c("tissue","trait","celltype","Gene","cell_type_short")) %>% dplyr::filter(celltype != "GTEx_Lung" ) %>% dplyr::mutate(cell_type_short=factor(cell_type_short,levels=c(unique(c(cell_type_short_dict[['Blood']],cell_type_short_dict[['Lung']])),"GTEx_Lung"))) %>% 
 arrange(tissue,cell_type_short) 
 
 gene_list = list()
@@ -880,7 +939,7 @@ for (x in 1:nrow(celltypes)){
     anc = celltypes$ancestry[x]
     besd_dir=paste0(ts,"/sc-eQTL/results/besd")
         draw_effect_plot(ts,GWAS_list,trait=tr,probe=probe,gene=gene,ancestry=anc,celltype=ct,chr=chr,title=bquote(paste(.(ts), "-", .(cell_type_short_dict[[ts]][ct]),"-",.(anc))),tmp_dir=tmp_dir,r2_threshold=0.1, cisWindow=2000,ref_dir=ref_dir,SMR_path=SMR,besd_dir=ifelse(celltypes[x] == "GTEx_Lung", "eQTL/gtex_resources_besd/eQTL_hg38/eQTL_besd_hg38", besd_dir))
-        ggsave(file.path(output_dir, "fig7_SMR_effectplot_",tr,"_",ts,"_",anc,"_",gene,"_",ct,".png"), width=4.5, height=3)
+        ggsave(file.path(output_dir, paste0("fig7_SMR_effectplot_",tr,"_",ts,"_",anc,"_",gene,"_",ct,".png")), width=4.5, height=3)
 }
 
 
@@ -956,7 +1015,7 @@ for (x in 1:nrow(celltypes)) {
 
 
 
-if(!file.exists(file.path(output_dir, "fig7_locusplot_Lung_EUR_", tr, "_", gene, ".png"))){
+if(!file.exists(file.path(output_dir, paste0("fig7_locusplot_Lung_EUR_", tr, "_", gene, ".png")))){
     # Create the GWAS locus plot with error handling
     #gwas_target = gwas_target[SNP %in% query_gene[[1]]$SNP]
     idx_list = lapply(query_gene, function(q) {
@@ -1024,7 +1083,7 @@ if(!file.exists(file.path(output_dir, "fig7_locusplot_Lung_EUR_", tr, "_", gene,
         plot_list = lapply(plot_list, function(p) p+theme(plot.margin=margin(b=0.5,t=0.8,unit="cm")))
         plot_grid(plotlist = plot_list, ncol = ifelse(length(plot_list)>5,2,1), align = "v", rel_heights=c(rep(1,ceiling(length(plot_list)/2)-1),1.15))
         ggsave(
-            filename = file.path(output_dir, "fig7_locusplot_Lung_EUR_", tr, "_", gene, "_no_label.png"),
+            filename = file.path(output_dir, paste0("fig7_locusplot_Lung_EUR_", tr, "_", gene, "_no_label.png")),
             width = ifelse(length(plot_list)>5,10,5), height = ceiling(length(plot_list)/2)*3
         )
 
@@ -1038,104 +1097,100 @@ if(!file.exists(file.path(output_dir, "fig7_locusplot_Lung_EUR_", tr, "_", gene,
 gene="FAM13A"
 tr="IPF"
 for (ts in c("Blood","Lung")){
-gene_expr_df = fread(paste0("expression_decile/",ts,"_EUR_cross_celltype.txt"))
-if(ts=="Blood"){gene_expr_df = gene_expr_df[,-c(12)]}
-expr = gene_expr_df[gene_name==gene,-1]
-ct <- sapply(colnames(expr), function(x) str_replace(str_replace(x,"expr_mean_",""),"_EUR",""))
-stats <- data.frame(cell_type_short=cell_type_short_dict[[ts]][ct],expr=t(expr[1]))
-smr_results1 <- readRDS(file.path(smr_coloc_results_dir,"Lung_smr_results_EAS.rds"))$smr_results1
-coloc_results1 <- readRDS(file.path(smr_coloc_results_dir,"Blood_coloc_results_EAS.rds"))$coloc_results1
-stats <- stats %>% left_join(smr_results %>% dplyr::filter(trait==tr & Gene==gene & tissue==ts)%>%dplyr::select(cell_type_short,p_SMR),by="cell_type_short")
-stats <- stats %>% left_join(coloc_results %>% dplyr::filter(trait==tr & Gene==gene & tissue==ts)%>%dplyr::select(cell_type_short,pp4),by="cell_type_short")
+    gene_expr_df = fread(file.path("expression_decile",paste0(ts,"_EUR_cross_celltype.txt")))
+    expr = gene_expr_df[gene_name==gene,-1]
+    ct <- sapply(colnames(expr), function(x) str_replace(str_replace(x,"expr_mean_",""),"_EUR",""))
+    stats <- data.frame(cell_type_short=cell_type_short_dict[[ts]][ct],expr=t(expr[1]))
+    stats <- stats %>% left_join(smr_results %>% dplyr::filter(trait==tr & Gene==gene & tissue==ts)%>%dplyr::select(cell_type_short,p_SMR),by="cell_type_short")
+    stats <- stats %>% left_join(coloc_results %>% dplyr::filter(trait==tr & Gene==gene & tissue==ts)%>%dplyr::select(cell_type_short,pp4),by="cell_type_short")
+
+    long_data <- stats %>%
+    pivot_longer(cols = -cell_type_short, names_to = "variable", values_to = "value") %>%
+    mutate(
+        # Convert p-values to -log10 scale for better visualization
+        value = ifelse(variable == "p_SMR" & !is.na(value), -log10(value), value),
+        # Format cell types as factors to preserve order
+        cell_type_short = factor(cell_type_short, levels = rev(cell_type_short_dict[[ts]]))
+    )
 
 
-long_data <- stats %>%
-  pivot_longer(cols = -cell_type_short, names_to = "variable", values_to = "value") %>%
-  mutate(
-    # Convert p-values to -log10 scale for better visualization
-    value = ifelse(variable == "p_SMR" & !is.na(value), -log10(value), value),
-    # Format cell types as factors to preserve order
-    cell_type_short = factor(cell_type_short, levels = rev(cell_type_short_dict[[ts]]))
-  )
+    long_data <- long_data %>% dplyr::mutate(variable=factor(variable,levels=c("expr","pp4","p_SMR"),labels=c("Mean expression","coloc PP4","-log_10(P_SMR)")))  
 
+    p <- ggplot(long_data) +
+    # First layer: expr (orange scale)
+    geom_tile(
+        data = . %>% filter(variable == "Mean expression"),
+        aes(x = 1, y = cell_type_short, fill = value),
+        color = "black", na.rm = TRUE
+    ) +
+    scale_fill_gradientn(
+        colours = c("white", "#4965b0"),
+        na.value = "white",
+        name = "Mean expression",
+        limits = c(0, 0.6),
+        guide = guide_colorbar(barwidth = 5, barheight = 0.8, title.position="top",order=1) # Control bar size
+    ) +
 
-long_data <- long_data %>% dplyr::mutate(variable=factor(variable,levels=c("expr","pp4","p_SMR"),labels=c("Mean expression","coloc PP4","-log_10(P_SMR)")))  
+    # Second layer: pp4 (purple scale)
+    ggnewscale::new_scale_fill() +
+    geom_tile(
+        data = . %>% filter(variable == "coloc PP4"),
+        aes(x = 1, y = cell_type_short, fill = value),
+        color = "black", na.rm = TRUE
+    ) +
+    scale_fill_gradientn(
+        colours = c("white", "#a30543"),
+        na.value = "white",
+        limits = c(0, 1),
+        name = "coloc PP4",
+        guide = guide_colorbar(barwidth = 5, barheight = 0.8, title.position="top",order=2) # Control bar size
+    ) +
 
-p <- ggplot(long_data) +
-  # First layer: expr (orange scale)
-  geom_tile(
-    data = . %>% filter(variable == "Mean expression"),
-    aes(x = 1, y = cell_type_short, fill = value),
-    color = "black", na.rm = TRUE
-  ) +
-  scale_fill_gradientn(
-    colours = c("white", "#4965b0"),
-    na.value = "white",
-    name = "Mean expression",
-    limits = c(0, 0.6),
-    guide = guide_colorbar(barwidth = 5, barheight = 0.8, title.position="top",order=1) # Control bar size
-  ) +
+    # Third layer: p_SMR (pink scale)
+    ggnewscale::new_scale_fill() +
+    geom_tile(
+        data = . %>% filter(variable == "-log_10(P_SMR)"),
+        aes(x = 1, y = cell_type_short, fill = value),
+        color = "black", na.rm = TRUE
+    ) +
+    scale_fill_gradientn(
+        colours = c("white", "#f36f43"),
+        na.value = "white",
+        limits = c(1, 7),
+        name = "-log<sub>10</sub>(P<sub>SMR</sub>)",
+        guide = guide_colorbar(barwidth = 5, barheight = 0.8, title.position="top",order=3) # Control bar size
+    ) +
 
-  # Second layer: pp4 (purple scale)
-  ggnewscale::new_scale_fill() +
-  geom_tile(
-    data = . %>% filter(variable == "coloc PP4"),
-    aes(x = 1, y = cell_type_short, fill = value),
-    color = "black", na.rm = TRUE
-  ) +
-  scale_fill_gradientn(
-    colours = c("white", "#a30543"),
-    na.value = "white",
-    limits = c(0, 1),
-    name = "coloc PP4",
-    guide = guide_colorbar(barwidth = 5, barheight = 0.8, title.position="top",order=2) # Control bar size
-  ) +
+    # Faceting and theming
+    facet_wrap(~variable, nrow = 1,
+                labeller = as_labeller(c(
+                `Mean expression` = "Mean expression",
+                `coloc PP4` = "coloc PP4",
+                `-log_10(P_SMR)` = "-log<sub>10</sub>(P<sub>SMR</sub>)"
+                )),
+                strip.position = "top") +
+    theme_minimal() +
+    theme(
+        text = element_text(size = 12, family = "Helvetica"),
+        axis.text=element_text(size=12,color="black"),
+        axis.title = element_blank(),
+        axis.text.x = element_blank(),
+        panel.spacing = unit(0, "lines"),
+        strip.background = element_blank(),
+        panel.grid = element_blank(),
+        plot.title=element_text(size=16,hjust=0.5),
+        legend.position = "bottom",
+        legend.text = element_text(size=8,angle=90),
+        legend.title = element_markdown(size = 10, margin = margin(r = 10),family="Helvetica"), # Add space between title and bar
+        strip.text = element_markdown(size=12,angle = 90, hjust = 0, vjust = 0.5, family="Helvetica"),
+        #-- This is the key change for stacking legends --#
+        legend.box = "vertical",
+        legend.box.just = "left", # Align the block of legends to the left
+        legend.spacing = unit(0.15, "lines") # Adjust vertical space between legends
+    ) + 
+    coord_fixed(ratio = 1)
 
-  # Third layer: p_SMR (pink scale)
-  ggnewscale::new_scale_fill() +
-  geom_tile(
-    data = . %>% filter(variable == "-log_10(P_SMR)"),
-    aes(x = 1, y = cell_type_short, fill = value),
-    color = "black", na.rm = TRUE
-  ) +
-  scale_fill_gradientn(
-    colours = c("white", "#f36f43"),
-    na.value = "white",
-    limits = c(1, 7),
-    name = "-log<sub>10</sub>(P<sub>SMR</sub>)",
-    guide = guide_colorbar(barwidth = 5, barheight = 0.8, title.position="top",order=3) # Control bar size
-  ) +
+    if (ts=="Lung"){ p <- p+theme(legend.position="none")}
 
-  # Faceting and theming
-  facet_wrap(~variable, nrow = 1,
-             labeller = as_labeller(c(
-               `Mean expression` = "Mean expression",
-               `coloc PP4` = "coloc PP4",
-               `-log_10(P_SMR)` = "-log<sub>10</sub>(P<sub>SMR</sub>)"
-             )),
-             strip.position = "top") +
-  theme_minimal() +
-  theme(
-    text = element_text(size = 12, family = "Helvetica"),
-    axis.text=element_text(size=12,color="black"),
-    axis.title = element_blank(),
-    axis.text.x = element_blank(),
-    panel.spacing = unit(0, "lines"),
-    strip.background = element_blank(),
-    panel.grid = element_blank(),
-    plot.title=element_text(size=16,hjust=0.5),
-    legend.position = "bottom",
-    legend.text = element_text(size=8,angle=90),
-    legend.title = element_markdown(size = 10, margin = margin(r = 10),family="Helvetica"), # Add space between title and bar
-    strip.text = element_markdown(size=12,angle = 90, hjust = 0, vjust = 0.5, family="Helvetica"),
-    #-- This is the key change for stacking legends --#
-    legend.box = "vertical",
-    legend.box.just = "left", # Align the block of legends to the left
-    legend.spacing = unit(0.15, "lines") # Adjust vertical space between legends
-  ) + 
-  coord_fixed(ratio = 1)
-
-if (ts=="Lung"){ p <- p+theme(legend.position="none")}
-
-ggsave(file.path(output_dir, "fig7_expr_smr_coloc_heatmap_",ts,"_EUR_",tr,"_",gene,"_cross_celltype.png"),width=4.5, height=7)
+    ggsave(file.path(output_dir, paste0("fig7_expr_smr_coloc_heatmap_",ts,"_EUR_",tr,"_",gene,"_cross_celltype.png")),width=4.5, height=7)
 }
