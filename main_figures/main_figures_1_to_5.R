@@ -43,7 +43,7 @@ theme_set(
 )
 
 # Set the base directory for the project.
-base_dir <- "/path/to/your/scRNA_project_folder/"
+base_dir <- "/path/to/pancell_eqtl/"
 setwd(base_dir)
 
 # Define output directory for figures and intermediate data
