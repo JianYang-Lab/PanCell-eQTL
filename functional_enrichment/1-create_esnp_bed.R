@@ -1,7 +1,8 @@
+##############################################################################
 # Create eSNP bed files for different tissues and ancestries
 # This script processes significant eSNP files, extracts lead SNPs, and saves them in
 # BED format for functional annotation.
-
+##############################################################################
 # Load necessary libraries
 library(data.table)
 library(tidyverse)

@@ -24,7 +24,7 @@ library(ashr)
 # --- User-Defined Parameters ---
 
 # Define base paths
-base_path <- "/path/to/"
+base_path <- "/path/to/your/project/"
 mashr_path <- file.path(base_path, "mashR/cross_tissue/")
 
 # Define the list of tissues to analyze

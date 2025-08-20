@@ -8,130 +8,83 @@
 #SBATCH -J merge_vcf
 #SBATCH -p amd-ep2,intel-sc3,amd-ep2-short
 
-# ==============================================================================
-# VCF Merging Script
-# ==============================================================================
-# This script merges per-sample imputed VCF files for a specific chromosome
-# using bcftools. It is designed to be run as a Slurm job array.
-# ==============================================================================
+# Exit on error, undefined variable, or pipeline failure
+set -euo pipefail
 
-set -e # Exit immediately if a command exits with a non-zero status.
-set -u # Treat unset variables as an error.
-set -o pipefail # Exit status of a pipeline is the last command to exit with a non-zero status.
+# --- 1. Argument and Environment Setup ---
 
-# --- Function Definitions ---
-
-# Prints usage information for the script.
-usage() {
-    echo "Usage: $0 --tissue <tissue>"
-    echo ""
-    echo "Options:"
-    echo "  --tissue    Name of the tissue (e.g., Colon) corresponding to the data directory."
-    echo "  -h, --help  Display this help message."
+# Simplified argument parsing for a single required flag
+if [[ "$1" != "--tissue" || -z "$2" ]]; then
+    echo "Error: Missing or invalid arguments." >&2
+    echo "Usage: $0 --tissue <tissue_name>" >&2
     exit 1
-}
-
-# --- Configuration & Argument Parsing ---
-
-# Parse command-line arguments
-if [ "$#" -eq 0 ]; then
-    usage
 fi
+tissue="$2"
 
-while [ "$#" -gt 0 ]; do
-    case "$1" in
-        --tissue)   tissue="$2"; shift 2;;
-        -h|--help)  usage;;
-        *)          echo "Unknown option: $1" >&2; usage;;
-    esac
-done
-
-# Check if the tissue argument was provided
-if [ -z "${tissue:-}" ]; then
-    echo "Error: --tissue argument is required." >&2
-    usage
-fi
-
-# --- Environment and Path Setup ---
-
-echo "--- Setting up environment ---"
+# Load necessary software
 module load bcftools
 
-# Define the chromosome for this job array task
-readonly CHR_ID=${SLURM_ARRAY_TASK_ID}
-readonly NUM_THREADS=${SLURM_CPUS_PER_TASK}
+# Define key variables from Slurm environment
+CHR_ID=${SLURM_ARRAY_TASK_ID}
+NUM_THREADS=${SLURM_CPUS_PER_TASK}
 
-# Define base paths using the tissue argument
-readonly BASE_DIR="/path/to/your/project/${tissue}"
-readonly INPUT_DIR="${BASE_DIR}/VCF_1KGimputed/VCF_persample"
-readonly OUTPUT_DIR="${BASE_DIR}/VCF_1KGimputed/VCF_merged"
+# Define paths
+INPUT_DIR="/path/to/${tissue}/VCF_1KGimputed/VCF_persample"
+OUTPUT_DIR="/path/to/${tissue}/VCF_1KGimputed/VCF_merged"
 
-# Check if input directory exists
+# Ensure directories exist
+mkdir -p "${OUTPUT_DIR}" LOG
 if [ ! -d "${INPUT_DIR}" ]; then
     echo "Error: Input directory not found at ${INPUT_DIR}" >&2
     exit 1
 fi
 
-# Create output and log directories if they don't exist
-mkdir -p "${OUTPUT_DIR}"
-mkdir -p "LOG"
+# --- 2. Temporary Workspace & Cleanup ---
 
-# --- Main Workflow ---
-
-# Create a temporary local directory on the compute node for faster I/O
-readonly LOCAL_DIR="/data/$$_${tissue}_chr${CHR_ID}"
-echo "Creating temporary directory: ${LOCAL_DIR}"
+# Use fast, node-local storage for temporary files to improve I/O speed.
+# The directory is unique to this job ($$) and array task (${CHR_ID}).
+LOCAL_DIR="/data/$$_${tissue}_chr${CHR_ID}"
 mkdir -p "${LOCAL_DIR}"
 
-# Define a cleanup function to be called on script exit
+# 'trap' ensures the cleanup function runs automatically when the script exits
 cleanup() {
-    echo "--- Cleaning up temporary files ---"
+    echo "--- Cleaning up ${LOCAL_DIR} ---"
     rm -rf "${LOCAL_DIR}"
-    echo "Temporary directory ${LOCAL_DIR} removed."
 }
 trap cleanup EXIT
 
-echo "--- Starting VCF merge for ${tissue}, Chromosome ${CHR_ID} ---"
+# --- 3. Main Workflow ---
 
-# 1. Generate File List and Stage Data
-cd "${INPUT_DIR}"
-readonly SAMPLE_LIST="sample_chr${CHR_ID}.list"
+echo "--- Starting merge for ${tissue}, Chromosome ${CHR_ID} ---"
 
-echo "Generating file list for chr${CHR_ID}..."
-# Find all imputed VCF files for the current chromosome
-ls *_chr${CHR_ID}_imputed.vcf.gz > "${LOCAL_DIR}/${SAMPLE_LIST}"
+# Find all relevant VCF files and create a list inside the temporary directory
+SAMPLE_LIST="${LOCAL_DIR}/sample_chr${CHR_ID}.list"
+find "${INPUT_DIR}" -maxdepth 1 -name "*_chr${CHR_ID}_imputed.vcf.gz" > "${SAMPLE_LIST}"
 
-if [ ! -s "${LOCAL_DIR}/${SAMPLE_LIST}" ]; then
-    echo "Warning: No imputed VCF files found for chr${CHR_ID}. Exiting."
+# Exit gracefully if no VCF files were found for this chromosome
+if [ ! -s "${SAMPLE_LIST}" ]; then
+    echo "Warning: No imputed VCFs found for chr${CHR_ID}. Exiting."
     exit 0
 fi
 
-echo "Staging VCF files to ${LOCAL_DIR}..."
-# Copy the relevant VCF and index files to the local directory
-# Using rsync for potentially better performance with many small files
-rsync -a --files-from="${LOCAL_DIR}/${SAMPLE_LIST}" . "${LOCAL_DIR}/"
-# Also copy the corresponding index files
-sed 's/\.gz$/.gz.csi/' "${LOCAL_DIR}/${SAMPLE_LIST}" | xargs -I {} rsync -a --ignore-missing-args {} "${LOCAL_DIR}/"
+# Stage the VCFs and their corresponding index files to the local directory
+rsync -a --files-from="${SAMPLE_LIST}" "${INPUT_DIR}/" "${LOCAL_DIR}/"
+sed 's/\.gz$/.gz.csi/' "${SAMPLE_LIST}" | xargs -I {} rsync -a --ignore-missing-args "${INPUT_DIR}/"{} "${LOCAL_DIR}/"
 
-# 2. Merge VCFs
-cd "${LOCAL_DIR}"
-echo "Merging VCFs for chr${CHR_ID} using ${NUM_THREADS} threads..."
-readonly MERGED_VCF="merged_chr${CHR_ID}.vcf.gz"
+# Perform the merge and index operations inside the fast local directory
+MERGED_VCF="${LOCAL_DIR}/merged_chr${CHR_ID}.vcf.gz"
 
+echo "Merging VCFs using ${NUM_THREADS} threads..."
 bcftools merge \
     -l "${SAMPLE_LIST}" \
     --threads "${NUM_THREADS}" \
     -Oz -o "${MERGED_VCF}"
 
-echo "Indexing the merged VCF..."
-bcftools index "${MERGED_VCF}"
+echo "Indexing merged VCF..."
+bcftools index --threads "${NUM_THREADS}" "${MERGED_VCF}"
 
-echo "Merging finished."
+# Copy final results back to the persistent storage directory
+echo "Copying final results to ${OUTPUT_DIR}..."
+cp "${MERGED_VCF}"* "${OUTPUT_DIR}/"
 
-# 3. Copy Results Back
-echo "Copying merged VCF back to ${OUTPUT_DIR}..."
-cp -v "${MERGED_VCF}"* "${OUTPUT_DIR}/"
-
-echo "--- Session for chr${CHR_ID} completed successfully! ---"
-
-# The 'trap cleanup EXIT' will handle the removal of the local directory.
+echo "--- Job for chr${CHR_ID} completed successfully! ---"

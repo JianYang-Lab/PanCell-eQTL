@@ -27,7 +27,7 @@ celltype=$6
 # 1. Load paths -----------------------------------------------------
 SMR=/path/to/smr-1.3.1-linux-x86_64/smr
 COLOC=COLOC_perm.R
-GWAS_list=/path/to/Blood/script_post_eqtl/GWAS_${GWAS_ancestry}_list.txt
+GWAS_list=/path/to/GWAS_${GWAS_ancestry}_list.txt
 GWAS_trait=`head -n ${GWAS_id} $GWAS_list | tail -n 1 | cut -f 1`
 GWAS_path=`head -n ${GWAS_id} $GWAS_list | tail -n 1 | cut -f 4`
 GWAS_path_local=`basename $GWAS_path`

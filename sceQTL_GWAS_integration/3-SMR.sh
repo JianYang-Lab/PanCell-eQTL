@@ -37,9 +37,9 @@ SMR=/path/to/smr-1.3.1-linux-x86_64/smr
 ref_dir=/path/to/resource/1000genomes
 # GWAS path
 if [ $GWAS_ancestry == "EAS" ]; then
-	GWAS_list=/path/to/Blood/script_post_eqtl/GWAS_${GWAS_ancestry}_list.txt
+	GWAS_list=/path/to/GWAS_${GWAS_ancestry}_list.txt
 else
-	GWAS_list=/path/to/Blood/script_post_eqtl/GWAS_${GWAS_ancestry}_list.txt
+	GWAS_list=/path/to/GWAS_${GWAS_ancestry}_list.txt
 fi
 GWAS_trait=`head -n ${GWAS_id} $GWAS_list | tail -n 1 | cut -f 1`
 GWAS_path=`head -n ${GWAS_id} $GWAS_list | tail -n 1 | cut -f 4`

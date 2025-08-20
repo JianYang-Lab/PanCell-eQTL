@@ -59,17 +59,17 @@ module load plink/2.0  # For other tasks
 module load bcftools
 
 # TODO: Update this path to point to your GCTA executable.
-readonly GCTA_EXEC="/path/to/your/gcta-1.94.1"
-readonly NUM_THREADS=${SLURM_CPUS_PER_TASK}
+GCTA_EXEC="/path/to/your/gcta-1.94.1"
+NUM_THREADS=${SLURM_CPUS_PER_TASK}
 
 # Define base paths using the tissue argument
 # TODO: Update this base path to your project's root directory.
-readonly BASE_PROJECT_DIR="/path/to/your/project/${tissue}"
-readonly VCF_DIR="${BASE_PROJECT_DIR}/VCF_TopMedimputed/filtered"
-readonly BED_DIR="${BASE_PROJECT_DIR}/VCF_TopMedimputed/filtered" # Assuming output goes to the same dir
+BASE_PROJECT_DIR="/path/to/${tissue}"
+VCF_DIR="${BASE_PROJECT_DIR}/VCF_TopMedimputed/filtered"
+BED_DIR="${BASE_PROJECT_DIR}/VCF_TopMedimputed/filtered" # Assuming output goes to the same dir
 
 # TODO: Update this path to your reference panel directory.
-readonly REF_DIR="/path/to/your/reference_panel"
+REF_DIR="/path/to/reference_panel"
 
 # Create output and log directories if they don't exist
 mkdir -p "${BED_DIR}"
@@ -78,7 +78,7 @@ mkdir -p "LOG"
 # --- Main Workflow ---
 
 # Create a temporary local directory on the compute node for faster I/O
-readonly LOCAL_DIR="/data/$$_${tissue}_merge_pca"
+LOCAL_DIR="/data/$$_${tissue}_merge_pca"
 echo "Creating temporary directory: ${LOCAL_DIR}"
 mkdir -p "${LOCAL_DIR}"
 

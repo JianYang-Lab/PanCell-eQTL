@@ -15,7 +15,7 @@ tissue=$1
 ancestry=$2
 sig_path="/path/to/${tissue}/sc-eQTL/results/sig"
 geno_path="/path/to/${tissue}/sc-eQTL/genotype"
-chromHMM_path="/storage/yangjianLab/chenchang/resource/chromHMM/"
+chromHMM_path="/path/to/resource/chromHMM/"
 chromHMM_dir=$3
 func_anno_path="/path/to/${tissue}/sc-eQTL/results/functional_annotation/chromHMM"
 

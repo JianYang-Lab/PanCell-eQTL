@@ -37,7 +37,7 @@ def load_parquet_chr(celltype, ancestry, pc_num, chrom, gtf, parquet_dir=f"/path
     print(f'Chr{chrom} processed') 
     return(df)
 
-def add_rsid_with_flip(df,chrom, variant_files_dir="/storage/yangjianLab/sharedata/GATK_resource/dbSNP_b151/split_into_chrAuto"):
+def add_rsid_with_flip(df,chrom, variant_files_dir="/path/to/GATK_resource/dbSNP_b151/split_into_chrAuto"):
     # Process each chromosome present in the GWAS data
     variant_file = f"chr{chrom}_variants_hg38_b151.txt"
     os.system(f"cp {variant_files_dir}/{variant_file} {dir_local}")

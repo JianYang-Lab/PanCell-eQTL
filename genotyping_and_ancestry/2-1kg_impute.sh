@@ -34,9 +34,9 @@ usage() {
 # --- Configuration & Argument Parsing ---
 
 # Static paths for software and reference data
-readonly MINIMAC4_EXEC="/storage/yangjianLab/chenchang/SOFTWARE/Minimac4/bin/minimac4"
-readonly REF_PATH="/storage/yangjianLab/chenchang/resource/1000genomes/minimac_ref"
-readonly OUTPUT_DIR="../VCF_1KGimputed/VCF_persample"
+MINIMAC4_EXEC="/path/to/SOFTWARE/Minimac4/bin/minimac4"
+REF_PATH="/path/to/resource/1000genomes/minimac_ref"
+OUTPUT_DIR="/path/to/${tissue}/VCF_1KGimputed/VCF_persample"
 
 # Parse command-line arguments
 if [ "$#" -eq 0 ]; then
@@ -69,12 +69,12 @@ source ~/.bashrc
 echo "--- Starting Imputation Job Submission for Project: ${project_id}, Sample: ${sample_name} ---"
 
 # Construct the base directory using the 'tissue' argument
-readonly BASE_DIR="/path/to/your/project/${tissue}/raw_data"
+BASE_DIR="/path/to/${tissue}/raw_data"
 
 # Create the main output directory if it doesn't exist
 mkdir -p "${OUTPUT_DIR}"
 
-readonly project_dir="${BASE_DIR}/${project_id}"
+project_dir="${BASE_DIR}/${project_id}"
 if [ ! -d "${project_dir}/monopogen" ]; then
     echo "Error: Monopogen directory not found for project ${project_id} at ${project_dir}/monopogen" >&2
     exit 1

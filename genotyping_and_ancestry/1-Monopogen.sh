@@ -61,7 +61,7 @@ if [ -z "${tissue:-}" ] || [ -z "${project:-}" ] || [ -z "${sample:-}" ]; then
 fi
 
 # Construct project path and check for existence
-readonly PROJECT_PATH="/path/to/your/project/${tissue}/raw_data/${project}"
+readonly PROJECT_PATH="/path/to/${tissue}/raw_data/${project}"
 if [ ! -d "${PROJECT_PATH}" ]; then
     echo "Error: Project path does not exist: ${PROJECT_PATH}" >&2
     exit 1

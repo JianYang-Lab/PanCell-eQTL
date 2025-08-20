@@ -1,7 +1,4 @@
 #!/bin/bash
-##############################################################################
-# Create eQTL besd file from query for SMR
-##############################################################################
 #SBATCH --mem=100G 
 #SBATCH -c 1
 #SBATCH -p intel-sc3,amd-ep2
@@ -9,6 +6,10 @@
 #SBATCH --job-name=sceQTL_besd
 #SBATCH --output=sceQTL_besd_%j.out
 #SBATCH --error=sceQTL_besd_%j.err
+
+##############################################################################
+# Create eQTL besd file from query for SMR
+##############################################################################
 
 tissue=$1
 ancestry=$2

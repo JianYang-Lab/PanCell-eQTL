@@ -24,7 +24,7 @@ def load_genotype(tissue,ancestry):
     variant_df = pr.bim.set_index('snp')[['chrom', 'pos']] 
     return(genotype_df, variant_df)
     
-def load_genes_gtf(annotation_gtf = "/storage/yangjianLab/chenchang/scRNA/Blood/resource/genes.gtf"): 
+def load_genes_gtf(annotation_gtf = "/path/to/resource/genes.gtf"): 
     gene_gtf = pd.read_csv(annotation_gtf, sep='\t', index_col=1)
     gene_gtf.columns = ['gene_name','gene_chr','gene_start','gene_end','strand'] 
     return(gene_gtf)
@@ -101,7 +101,7 @@ if __name__=='__main__':
     pc_num = int(sys.argv[4])
     print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Ancestry:{ancestry} Cell type:{celltype}  nPC:{pc_num}', flush=True)
     
-    os.chdir(f"/storage/yangjianLab/chenchang/scRNA/{tissue}/sc-eQTL")
+    os.chdir(f"/path/to/{tissue}/sc-eQTL")
 
     # load genotypes and variants into data frames
     print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Load genotype for ancestry {ancestry} started', flush=True)

@@ -38,7 +38,7 @@ def load_and_prepare_data(tissue, hvg_suffix):
     """
     print("Loading and preparing data...")
 
-    file_path = f"/path/to/your/project/{tissue}/h5ad_merge/{tissue}_merged_rawQC_{hvg_suffix}.h5ad"
+    file_path = f"{tissue}/h5ad_merge/{tissue}_merged_rawQC_{hvg_suffix}.h5ad"
     adata = sc.read_h5ad(file_path)
 
     print(f'Number of cells: {adata.shape[0]}')
@@ -63,10 +63,10 @@ def train_scvi_model(adata, batch_key, model_suffix):
     model : scvi.model.SCVI
         Trained scVI model.
     """
-    if os.path.exists(f'../integration/model/scvi_{model_suffix}'):
+    if os.path.exists(f'{tissue}/integration/model/scvi_{model_suffix}'):
         # Load the existing model
         print("Load existing scVI model")
-        model = scvi.model.SCVI.load(f'../integration/model/scvi_{model_suffix}', adata)
+        model = scvi.model.SCVI.load(f'{tissue}/integration/model/scvi_{model_suffix}', adata)
 
     else:
         print("Setting up and training scVI model...")
@@ -101,7 +101,7 @@ def train_scvi_model(adata, batch_key, model_suffix):
 
         print(model)
         print('Saving scVI model...')
-        model.save(f'../integration/model/scvi_{model_suffix}')
+        model.save(f'{tissue}/integration/model/scvi_{model_suffix}')
 
     return model
 
@@ -136,7 +136,7 @@ def train_scanvi_model(model, adata, labels_key, model_suffix):
     )
 
     # Set up checkpoint callback
-    checkpoint_dir = "../integration/checkpoints"
+    checkpoint_dir = f"{tissue}/integration/checkpoints"
     checkpoint_filename = f"scanvi_{model_suffix}_checkpoint"
     checkpoint_callback = scvi.train.SaveCheckpoint(
         dirpath=checkpoint_dir,
@@ -162,11 +162,11 @@ def train_scanvi_model(model, adata, labels_key, model_suffix):
         )
 
         # Save model and embeddings
-        scanvi_model.save(f'../integration/model/{model_name}')
+        scanvi_model.save(f'{tissue}/integration/model/{model_name}')
         scanvi_embedding = scanvi_model.get_latent_representation(adata)
         scanvi_embedding = pd.DataFrame(scanvi_embedding, index=adata.obs_names)
         scanvi_embedding.to_csv(
-            f"../integration/embedding/{model_name}.csv.gz",
+            f"{tissue}/integration/embedding/{model_name}.csv.gz",
             header=None,
             compression="gzip"
         )
@@ -177,20 +177,20 @@ def train_scanvi_model(model, adata, labels_key, model_suffix):
         # Extract the best model from checkpoints
         best_model_path = checkpoint_callback.best_model_path
         if os.path.exists(best_model_path):
-            os.makedirs(os.path.dirname(f'../integration/model/{model_name}_best'), exist_ok=True)
-            shutil.move(best_model_path, f'../integration/model/{model_name}_best')
+            os.makedirs(os.path.dirname(f'{tissue}/integration/model/{model_name}_best'), exist_ok=True)
+            shutil.move(best_model_path, f'{tissue}/integration/model/{model_name}_best')
             model_name = f"{model_name}_best"
-            print(f"Best model moved to ../integration/model/{model_name}")
+            print(f"Best model moved to {tissue}/integration/model/{model_name}")
         # Load best model and generate embeddings
         best_scanvi_model = scvi.model.SCANVI.load(
-            f'../integration/model/{model_name}',
+            f'{tissue}/integration/model/{model_name}',
             adata=adata
         )
 
         best_scanvi_embedding = best_scanvi_model.get_latent_representation(adata)
         best_scanvi_embedding = pd.DataFrame(best_scanvi_embedding, index=adata.obs_names)
         best_scanvi_embedding.to_csv(
-            f"../integration/embedding/{model_name}.csv.gz",
+            f"{tissue}/integration/embedding/{model_name}.csv.gz",
             header=None,
             compression="gzip"
         )
@@ -228,7 +228,7 @@ def create_umap_and_clustering(tissue, model_name, hvg_suffix, n_neighbors, leid
 
     logging.info('Reading data')
 
-    h5ad_nn_path = f'../h5ad_merge/{tissue}_merged_rawQC_{model_name}_nn{n_neighbors}.h5ad'
+    h5ad_nn_path = f"../h5ad_merge/{tissue}_merged_rawQC_{model_name}_nn{n_neighbors}.h5ad"
     h5ad_raw_path = f"../h5ad_merge/{tissue}_merged_rawQC_{hvg_suffix}.h5ad"
 
     # Check if we need to load data
@@ -238,7 +238,7 @@ def create_umap_and_clustering(tissue, model_name, hvg_suffix, n_neighbors, leid
             adata = sc.read_h5ad(h5ad_nn_path)
         else:
             # Load embeddings and original data
-            scanvi_embedding = pd.read_csv(f"../integration/embedding/{model_name}.csv.gz", header=None, index_col=0)
+            scanvi_embedding = pd.read_csv(f"{tissue}/integration/embedding/{model_name}.csv.gz", header=None, index_col=0)
             adata = sc.read_h5ad(h5ad_raw_path)
             adata = adata[scanvi_embedding.index].copy()
             adata.obsm["X_scANVI"] = np.array(scanvi_embedding)
@@ -251,7 +251,7 @@ def create_umap_and_clustering(tissue, model_name, hvg_suffix, n_neighbors, leid
     else:
         # Use provided adata but make sure it has the scANVI embeddings and neighbors
         if "X_scANVI" not in adata.obsm:
-            scanvi_embedding = pd.read_csv(f"../integration/embedding/{model_name}.csv.gz", header=None, index_col=0)
+            scanvi_embedding = pd.read_csv(f"{tissue}/integration/embedding/{model_name}.csv.gz", header=None, index_col=0)
             adata = adata[scanvi_embedding.index].copy()
             adata.obsm["X_scANVI"] = np.array(scanvi_embedding)
 
@@ -266,13 +266,13 @@ def create_umap_and_clustering(tissue, model_name, hvg_suffix, n_neighbors, leid
 
     # Generate UMAP if not already done
     logging.info('Generating UMAP')
-    umap_path = f"../integration/umap/{model_name}_nn{n_neighbors}_umap.csv.gz"
+    umap_path = f"{tissue}/integration/umap/{model_name}_nn{n_neighbors}_umap.csv.gz"
     if os.path.isfile(umap_path) and "X_umap" not in adata.obsm:
         umap = pd.read_csv(umap_path, header=None, index_col=0)
         adata.obsm["X_umap"] = np.array(umap)
     elif "X_umap" not in adata.obsm:
         sc.tl.umap(adata, neighbors_key="scanvi", min_dist=0.3)
-        os.makedirs("../integration/umap", exist_ok=True)
+        os.makedirs(f"{tissue}/integration/umap", exist_ok=True)
         pd.DataFrame(adata.obsm["X_umap"], index=adata.obs_names).to_csv(
             umap_path,
             compression="gzip",
@@ -293,9 +293,9 @@ def create_umap_and_clustering(tissue, model_name, hvg_suffix, n_neighbors, leid
         )
 
     # Save clustering results
-    os.makedirs("../integration/leiden", exist_ok=True)
+    os.makedirs(f"{tissue}/integration/leiden", exist_ok=True)
     adata.obs[leiden_key].to_csv(
-        f'../integration/leiden/leiden_{leiden_res}_{model_name}.csv.gz',
+        f'{tissue}/integration/leiden/leiden_{leiden_res}_{model_name}.csv.gz',
         compression="gzip"
     )
 
@@ -304,8 +304,8 @@ def create_umap_and_clustering(tissue, model_name, hvg_suffix, n_neighbors, leid
     adata.write_h5ad(f'../h5ad_merge/{tissue}_merged_rawQC_{model_name}_umap_leiden.h5ad')
     # Generate plots
     logging.info("Generating plots")
-    os.makedirs("../integration/figures", exist_ok=True)
-    sc.settings.figdir = "../integration/figures/"
+    os.makedirs(f"{tissue}/integration/figures", exist_ok=True)
+    sc.settings.figdir = f"{tissue}/integration/figures/"
    
     sc.pl.umap(
         adata,
@@ -333,9 +333,9 @@ def run_full_workflow(tissue, hvg_suffix, batch_key, model_suffix, n_neighbors, 
         Resolution parameter for Leiden clustering.
     """
     # Create necessary directories
-    os.makedirs("../integration/model", exist_ok=True)
-    os.makedirs("../integration/embedding", exist_ok=True)
-    os.makedirs("../integration/checkpoints", exist_ok=True)
+    os.makedirs(f"{tissue}/integration/model", exist_ok=True)
+    os.makedirs(f"{tissue}/integration/embedding", exist_ok=True)
+    os.makedirs(f"{tissue}/integration/checkpoints", exist_ok=True)
 
     # Load and prepare data
     adata = load_and_prepare_data(tissue, hvg_suffix)
@@ -346,7 +346,7 @@ def run_full_workflow(tissue, hvg_suffix, batch_key, model_suffix, n_neighbors, 
     model_name = train_scanvi_model(model, adata, labels_key="celltypist_level3", model_suffix=model_suffix)
 
     # Get scANVI embeddings and add to AnnData
-    scanvi_embedding = pd.read_csv(f"../integration/embedding/{model_name}.csv.gz",
+    scanvi_embedding = pd.read_csv(f"{tissue}/integration/embedding/{model_name}.csv.gz",
                                    header=None, index_col=0)
     adata = adata[scanvi_embedding.index].copy()
     adata.obsm["X_scANVI"] = np.array(scanvi_embedding)
@@ -380,9 +380,9 @@ def main():
 
 
         # Create necessary directories
-        os.makedirs("../integration/model", exist_ok=True)
-        os.makedirs("../integration/embedding", exist_ok=True)
-        os.makedirs("../integration/checkpoints", exist_ok=True)
+        os.makedirs(f"{tissue}/integration/model", exist_ok=True)
+        os.makedirs(f"{tissue}/integration/embedding", exist_ok=True)
+        os.makedirs(f"{tissue}/integration/checkpoints", exist_ok=True)
         # Load and prepare data
         adata = load_and_prepare_data(tissue, hvg_suffix)
         # Train scVI model
