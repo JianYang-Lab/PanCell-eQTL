@@ -6,8 +6,6 @@ Our work provides a foundational resource that substantially expands the resolut
 
 This repository is organized into folders containing scripts for each stage of the analysis, from data processing to figure generation.
 
----
-
 ## PanCell-eQTL Data Portal
 
 To facilitate broad exploration of this atlas, all results are accessible through a comprehensive and interactive public data portal.
