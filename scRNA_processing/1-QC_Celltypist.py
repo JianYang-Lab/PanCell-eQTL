@@ -8,7 +8,7 @@ This script performs two main steps:
 2) Automatic cell type annotation using Celltypist
 
 Usage:
-    python script.py <tissue> <platform> [additional arguments based on platform]
+    python 1-QC_Celltypist.py <tissue> <platform> [additional arguments based on platform]
 """
 
 import os

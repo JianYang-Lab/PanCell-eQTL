@@ -6,7 +6,6 @@ Single-cell Variational Inference (scVI) and Single-cell Annotation
 using Variational Inference (scANVI) implementation for integration,
 analysis, and visualization of single-cell RNA-seq data.
 
-This version allows specifying the tissue type as a command-line argument.
 """
 
 import os
