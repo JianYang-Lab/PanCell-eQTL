@@ -1,10 +1,12 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
+##############################################################################
+# Script information
+# Step 5: TensorQTL
+# Author: Chang Chen
+# Date: 2024-09-26
+# Description: Perform sc-eQTL mapping using TensorQTL
+##############################################################################
 
-"""
-@file: 4-tensorqtl.py
-@desc: eQTL mapping using tensorQTL
-"""
+# Conda environment rsc_rapids
 
 import os
 import sys
@@ -12,7 +14,7 @@ from datetime import datetime
 import pandas as pd
 import torch
 import tensorqtl
-from tensorqtl import genotypeio, cis, trans
+from tensorqtl import genotypeio, cis, susie
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"torch: {torch.__version__} (CUDA {torch.version.cuda}), device: {device}")
 print(f"pandas {pd.__version__}")
@@ -48,7 +50,7 @@ def process_parquet_chr(celltype, ancestry, pc_num, chr, egene_ids, threshold_di
     df = pd.read_parquet(parquet_file)
     df = df[df['phenotype_id'].isin(egene_ids)]
     df = df[(df['af'] >= 0.01) & (df['af'] <= 0.99)] #! filter out MAF<0.01
-    sig_indice = df['pval_nominal'] < df['phenotype_id'].apply(lambda x: threshold_dict[x])
+    sig_indice = df['pval_nominal']<df['phenotype_id'].apply(lambda x: threshold_dict[x])
     signif_df = df[sig_indice]
     print(f'Chr{chr} processed') 
     return(signif_df)
@@ -85,24 +87,19 @@ def select_sig_eqtl(celltype, ancestry, pc_num, fdr = 0.05):
         n_egenes = signif_df.phenotype_id.nunique()
         n_eqtls = signif_df.shape[0] 
     else: 
-        n_genes = 0
+        n_egenes = 0
         n_eqtls = 0
     record_file = 'results/sig/eQTL_summary.tsv'
     append_eqtl_summary(record_file, celltype, ancestry, pc_num, n_egenes, n_eqtls)
 
 if __name__=='__main__':
-    # Read in tissue, cell type and ancestry
-    if len(sys.argv) != 5:
-        print("Usage: python 4-tensorqtl.py <tissue> <ancestry> <celltype> <pc_num>")
-        sys.exit(1)
-        
+    # Read in cell type and ancestry
     tissue = sys.argv[1]
     ancestry = sys.argv[2]
     celltype = sys.argv[3]
     pc_num = int(sys.argv[4])
 
-    # tissue is set in the bash script
-    os.chdir(f"/path/to/{tissue}/sc-eQTL")
+    os.chdir(f"/path/to/{tissue}/sc-eQTL_R")
 
     # load genotypes and variants into data frames
     print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Load genotype for ancestry {ancestry} started', flush=True)
@@ -120,23 +117,36 @@ if __name__=='__main__':
         phenotype_df, phenotype_pos_df, covariates_df = load_phenotype_and_covariates(ancestry, celltype, pc_num)
         print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Load phenotypes for {ancestry}_{celltype}_{pc_num} completed', flush=True) 
         
-        # cis-QTL mapping: permutations: controlling for global FDR < 0.05
+        # cis-QTL mapping: permutations
         cis_df = cis.map_cis(genotype_df, variant_df, phenotype_df, phenotype_pos_df, covariates_df, maf_threshold=0.01)
         tensorqtl.calculate_qvalues(cis_df, fdr=0.05, qvalue_lambda=0.85)
         cis_df.to_csv(f"{prefix}_perm.tsv", sep='\t')
         print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed permutations for {ancestry}_{celltype}_{pc_num}', flush=True)
-       
-        # Conditional independent analysis 
+        
+        # cis-QTL mapping: summary statistics for all variant-phenotype pairs
+        cis.map_nominal(genotype_df, variant_df, phenotype_df, phenotype_pos_df,
+                        prefix, covariates_df, output_dir='.', maf_threshold=0.01)
+        print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed eQTL mapping for {ancestry}_{celltype}_{pc_num}', flush=True)
+
+        # Conditional analysis
         indep_df = cis.map_independent(genotype_df, variant_df, cis_df,
                                         phenotype_df, phenotype_pos_df, covariates_df, maf_threshold=0.01)
         indep_df.to_csv(f"{prefix}_indep.tsv", sep='\t', index=False)
         print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed conditional eQTL mapping for {ancestry}_{celltype}_{pc_num}', flush=True)
-             
-        # cis-QTL mapping: summary statistics for all variant-phenotype pairs
-        cis.map_nominal(genotype_df, variant_df, phenotype_df, phenotype_pos_df,
-                        prefix, covariates_df, output_dir='.', maf_threshold=0.01)
 
-        print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed eQTL mapping for {ancestry}_{celltype}_{pc_num}', flush=True)
+        # Conditional analysis GTEx version
+        indep_df = cis.map_independent_old(genotype_df, variant_df, cis_df,
+                                        phenotype_df, phenotype_pos_df, covariates_df, maf_threshold=0.01)
+        indep_df.to_csv(f"{prefix}_indep_gtex.tsv", sep='\t', index=False)
+        print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed conditional eQTL mapping (GTEx) for {ancestry}_{celltype}_{pc_num}', flush=True)
+        
+        # SuSiE
+        susie_df = susie.map(genotype_df, variant_df, phenotype_df, phenotype_pos_df, covariates_df, maf_threshold=0.01)
+        if isinstance(susie_df, pd.DataFrame):
+            susie_df.to_csv(f"{prefix}_susie.tsv", sep='\t', index=False)
+            print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed SuSiE for {ancestry}_{celltype}_{pc_num}', flush=True)
+        else:
+            print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] SuSiE completed but no credible sets found for {ancestry}_{celltype}_{pc_num}', flush=True)
         
     if os.path.isfile(f"{prefix}_perm.tsv"):
         if not os.path.isfile(f"results/sig/{celltype}_{ancestry}_pc{pc_num}_sig.tsv.gz"):

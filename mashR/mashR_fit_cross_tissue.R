@@ -222,4 +222,4 @@ m2_posteriors <- mash(data_all_pairs, g = get_fitted_g(m), fixg = TRUE)
 output_file <- file.path(mashr_dir, paste0("mash_posteriors_", ct, "_chr", chrom, ".rds"))
 saveRDS(m2_posteriors, output_file)
 
-print(paste("✅ Analysis complete! Posterior results for chr", chrom, "saved to:", output_file))
+print(paste("Analysis complete! Posterior results for chr", chrom, "saved to:", output_file))

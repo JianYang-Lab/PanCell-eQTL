@@ -32,15 +32,13 @@ mashr_path <- file.path(base_path, "crossTissue_analysis/mashR/")
 args <- commandArgs(TRUE)
 tissue <- args[1]
 chrom <- args[2]
-# tissue <- "Blood"   # Manual override for interactive use
-# chrom <- "22"       # Manual override for interactive use
 
 if (is.na(tissue) || is.na(chrom)) {
   stop("Tissue or chromosome not provided. Usage: Rscript script.R <tissue> <chromosome_number>")
 }
 
 tissue_path <- file.path(base_path, tissue, "sc-eQTL/results/")
-print(paste0("🔬 Applying mashR model to ", tissue, " on chromosome ", chrom))
+print(paste0("Applying mashR model to ", tissue, " on chromosome ", chrom))
 
 
 ## 2. HELPER FUNCTIONS
@@ -124,7 +122,7 @@ names(cell_type_short_dict) <- tissue_list
 
 smr_list <- list()
 for (t in tissue_list) {
-  smr <- read_table(file.path(base_path, t, "sc-eQTL/results/sig/eQTL_summary_5en8_maf01.tsv"))
+  smr <- read_table(file.path(base_path, t, "sc-eQTL/results/sig/eQTL_summary_5en8.tsv"))
   smr$tissue <- t
   smr_list[[t]] <- smr
 }
@@ -145,12 +143,16 @@ ancestries_all_list <- list(
   Blood = c("EUR", "EAS", "AFR", "AMR"), Lung = c("EUR", "EAS"),
   Skin = c("EUR", "EAS"), Colon = c("EUR"), Liver = c("EUR", "EAS")
 )
-celltypes_all_list <- list(
-  Blood = c('CD4TNC','CD4TEM','Treg','CD8TNC','CD8TEM','CD8TEMRA','MAIT','NKp','NKn','BIN','BMem','Plasma','Plasmablasts','MonoC','MonoNC','Nph','DC','pDC'),
-  Liver = c('CD4T',"CD8T","Treg","MAIT","Th","gdT",'Circulating_NK','Resident_NK','B','Plasma','Monocytes','Macrophages','DC','pDC','Neutrophils','Basophils','Hepatocytes','Cholangiocytes','Endothelium','Fibroblasts'),
-  Skin = c("Th","Tc", "Treg","NK","DC1","DC2","MigDC","Macro1","Macro2","MonoMac","Mast","KCdiff","KCundiff","Melanocyte","VE1","VE2","VE3","LE1","Pericyte1","Pericyte2","F2"),
-  Lung = c("CD4T","CD8T","NK","B","Monocytes","Mast","Macrophages","DC","AT1","AT2","Airway_Epi_Multiciliated","Airway_Epi_Basal","Airway_Epi_Secretory","EC_arterial","EC_capillary","EC_venous","LEC_mature","LEC_diff","Fibroblasts","Smooth_muscle","Mesothelium","Rare"),
-  Colon = c("CD4T","CD8T","Treg","Th","gdT","NKT","NK","ILC3","BIN","BMem","Bcyc","Plasma","Mono","Macro","cDC2","Mast","Colonocyte","GLoblet","Tuft","TA", "EEC" ,"ECcap","ECven","Stromal1","Stromal2","Myofibroblast","Glia")
+celltypes_all_list = list(
+  Blood = c('CD4TNC','CD4TEM','Treg','CD4TEMRA','CD8TNC','CD8TRM','CD8TEMRA','MAIT','NKp','NKn','gdT','BIN','BMemNS','BMemS','Plasma','Plasmablasts','MonoC','MonoNC','DC1','DC2','Macro','Nph','pDC'),
+  
+  Lung = c("CD4TNC","CD4TEM","Treg","CD8TEMRA","CD8TEMTRM","CD8TRM","Tfh","NKp","NKn","NKCyc","BIN","BMem","Plasma","MonoC","MonoNC","Macro","MacroCyc","MacroInt","MacroAlv","Mast","DC1","DC2","MigDC","pDC","Eryth","Basal","Suprabasal","Ciliated","Club","Goblet","Ion","AT1","AT2","ECArt","AeroCap","ECCap","ECVenPulm","ECVenSys","LECdiff","LECmat","FibroAdv","FibroAlv","Myofibro","Pericyte","Meso"),
+  
+  Skin = c("CD4TNC","CD4TEM","Treg","CD8TEMRA","CD8TEMTRM","ILC3","NKp","NKn","BMem","Plasma","MonoMac","Macro1","Macro2","MacroInf","Mast","DC1","DC2","moDC","pDC","LC","MigLC","MigDC","KCundiff","KCdiff","Melano","VEC1","VEC2","VEC3","LE1","LE2","Fibro1","Fibro2","Fibro3","Pericyte1","Pericyte2","Schwann1","Schwann2"),
+  
+  Liver = c("CD4TNC","CD4TEM","Treg","CD8TEMRA","CD8TRM","MAIT","NKp","NKn","BIN","BMem","Plasma","MonoC","MonoNC","Macro","KC","Mast","Nph","DC1","DC2","HepPP","HepIZ","HepPC","CGC","Endo_portal","LSEC_PP","LSEC_CV","Fibro","HSC"),
+  
+  Colon = c("CD4TNC","CD4TEM","Tfh","Th1","Th17","Treg","CD8TEMTRM","CD8TRM","gdT","ILC","NKp","NKn","Bf","BGC","BIN","BMem","Plasma","Mono","Macro","MacroIntest","Mast","DC2","Stem","TA","TA_CycSec","Entero","Entero_BEST4","Colono","GobletImm","Goblet","Paneth","Tuft","EEC","ECArt","ECCap","ECVen","LEC","Stromal1","Stromal2","Stromal3","Myofibro","Pericyte","Glia")
 )
 
 
@@ -239,4 +241,4 @@ m2 <- mash(data_STRONG, g = get_fitted_g(m), fixg = TRUE)
 # Save the final posterior results object
 saveRDS(m2, paste0(mashr_path, "step5_m2_all_posterior_", tissue, "_chr", chrom, ".rds"))
 
-print(paste("✅ Analysis complete for", tissue, "chr", chrom))
+print(paste("Analysis complete for", tissue, "chr", chrom))

@@ -91,13 +91,18 @@ ancestries_all_list <- list(
   Blood = c("EUR", "EAS", "AFR", "AMR"), Lung = c("EUR", "EAS"),
   Skin = c("EUR", "EAS"), Colon = c("EUR"), Liver = c("EUR", "EAS")
 )
-celltypes_all_list <- list(
-  Blood = c('CD4TNC','CD4TEM','Treg','CD8TNC','CD8TEM','CD8TEMRA','MAIT','NKp','NKn','BIN','BMem','Plasma','Plasmablasts','MonoC','MonoNC','Nph','DC','pDC'),
-  Liver = c('CD4T',"CD8T","Treg","MAIT","Th","gdT",'Circulating_NK','Resident_NK','B','Plasma','Monocytes','Macrophages','DC','pDC','Neutrophils','Basophils','Hepatocytes','Cholangiocytes','Endothelium','Fibroblasts'),
-  Skin = c("Th","Tc", "Treg","NK","DC1","DC2","MigDC","Macro1","Macro2","MonoMac","Mast","KCdiff","KCundiff","Melanocyte","VE1","VE2","VE3","LE1","Pericyte1","Pericyte2","F2"),
-  Lung = c("CD4T","CD8T","NK","B","Monocytes","Mast","Macrophages","DC","AT1","AT2","Airway_Epi_Multiciliated","Airway_Epi_Basal","Airway_Epi_Secretory","EC_arterial","EC_capillary","EC_venous","LEC_mature","LEC_diff","Fibroblasts","Smooth_muscle","Mesothelium","Rare"),
-  Colon = c("CD4T","CD8T","Treg","Th","gdT","NKT","NK","ILC3","BIN","BMem","Bcyc","Plasma","Mono","Macro","cDC2","Mast","Colonocyte","GLoblet","Tuft","TA", "EEC" ,"ECcap","ECven","Stromal1","Stromal2","Myofibroblast","Glia")
+celltypes_all_list = list(
+  Blood = c('CD4TNC','CD4TEM','Treg','CD4TEMRA','CD8TNC','CD8TRM','CD8TEMRA','MAIT','NKp','NKn','gdT','BIN','BMemNS','BMemS','Plasma','Plasmablasts','MonoC','MonoNC','DC1','DC2','Macro','Nph','pDC'),
+  
+  Lung = c("CD4TNC","CD4TEM","Treg","CD8TEMRA","CD8TEMTRM","CD8TRM","Tfh","NKp","NKn","NKCyc","BIN","BMem","Plasma","MonoC","MonoNC","Macro","MacroCyc","MacroInt","MacroAlv","Mast","DC1","DC2","MigDC","pDC","Eryth","Basal","Suprabasal","Ciliated","Club","Goblet","Ion","AT1","AT2","ECArt","AeroCap","ECCap","ECVenPulm","ECVenSys","LECdiff","LECmat","FibroAdv","FibroAlv","Myofibro","Pericyte","Meso"),
+  
+  Skin = c("CD4TNC","CD4TEM","Treg","CD8TEMRA","CD8TEMTRM","ILC3","NKp","NKn","BMem","Plasma","MonoMac","Macro1","Macro2","MacroInf","Mast","DC1","DC2","moDC","pDC","LC","MigLC","MigDC","KCundiff","KCdiff","Melano","VEC1","VEC2","VEC3","LE1","LE2","Fibro1","Fibro2","Fibro3","Pericyte1","Pericyte2","Schwann1","Schwann2"),
+  
+  Liver = c("CD4TNC","CD4TEM","Treg","CD8TEMRA","CD8TRM","MAIT","NKp","NKn","BIN","BMem","Plasma","MonoC","MonoNC","Macro","KC","Mast","Nph","DC1","DC2","HepPP","HepIZ","HepPC","CGC","Endo_portal","LSEC_PP","LSEC_CV","Fibro","HSC"),
+  
+  Colon = c("CD4TNC","CD4TEM","Tfh","Th1","Th17","Treg","CD8TEMTRM","CD8TRM","gdT","ILC","NKp","NKn","Bf","BGC","BIN","BMem","Plasma","Mono","Macro","MacroIntest","Mast","DC2","Stem","TA","TA_CycSec","Entero","Entero_BEST4","Colono","GobletImm","Goblet","Paneth","Tuft","EEC","ECArt","ECCap","ECVen","LEC","Stromal1","Stromal2","Stromal3","Myofibro","Pericyte","Glia")
 )
+
 
 # Load metadata for cell type names and sample sizes
 cell_type_cat_colors <- read_delim(file.path(base_path, "cell_type_colors_new.txt"), delim = '\t')
@@ -114,7 +119,7 @@ names(cell_type_short_dict) <- tissue_list
 # Load eQTL summary counts from all tissues
 smr_list <- list()
 for (t in tissue_list) {
-  smr <- read_table(file.path(base_path, t, "sc-eQTL/results/sig/eQTL_summary_5en8_maf01.tsv"))
+  smr <- read_table(file.path(base_path, t, "sc-eQTL/results/sig/eQTL_summary_5en8.tsv"))
   smr$tissue <- t
   smr_list[[t]] <- smr
 }
@@ -280,6 +285,25 @@ if (!file.exists(paste0(mashr_path, "step4_strong_random_for_mash_", tissue, ".r
         df_strong_all_z_wide[[i]] <- handle_nan_z(df_strong_all_z_wide[[i]], df_strong_all_slope_wide[[i]], df_strong_all_se_wide[[i]])
     }
 
+    # STRICT OVERLAP FILTERING-----------------------
+    print("Applying strict overlap filter: removing pairs with missing data in any condition...")
+      
+    # Identify rows where no condition has an SE of 1000 (meaning complete data)
+    strong_keep_idx <- rowSums(df_strong_all_se_wide[, 3:ncond, with=FALSE] == 1000) == 0
+    random_keep_idx <- rowSums(df_random_all_se_wide[, 3:ncond, with=FALSE] == 1000) == 0
+      
+    # Apply filter to strong set
+    df_strong_all_z_wide <- df_strong_all_z_wide[strong_keep_idx]
+    df_strong_all_slope_wide <- df_strong_all_slope_wide[strong_keep_idx]
+    df_strong_all_se_wide <- df_strong_all_se_wide[strong_keep_idx]
+    print(paste("Strong set: Retained", sum(strong_keep_idx), "out of", length(strong_keep_idx), "variants."))
+
+    # Apply filter to random set
+    df_random_all_z_wide <- df_random_all_z_wide[random_keep_idx]
+    df_random_all_slope_wide <- df_random_all_slope_wide[random_keep_idx]
+    df_random_all_se_wide <- df_random_all_se_wide[random_keep_idx]
+    print(paste("Random set: Retained", sum(random_keep_idx), "out of", length(random_keep_idx), "variants."))
+    
     out <- list(
         random_pair = as.data.frame(df_random_all_z_wide)[, 1:2],
         random_z = as.data.frame(df_random_all_z_wide)[, 3:ncond],
@@ -310,7 +334,7 @@ data_STRONG <- mash_set_data(as.matrix(out$strong_b), as.matrix(out$strong_s), V
 
 # --- Step 5.2: Set up covariance matrices ---
 print("Step 5.2: Set up data-driven and canonical covariance matrices.")
-U.pca <- cov_pca(data_STRONG, 5)
+U.pca <- cov_pca(data_STRONG, 10)
 U.ed <- cov_ed(data_STRONG, U.pca)
 U.c <- cov_canonical(data_RANDOM)
 Ulist <- c(U.ed, U.c)
@@ -330,4 +354,4 @@ print("Step 5.5: Assess pairwise sharing.")
 m.pairwise_PM <- get_pairwise_sharing(m2, lfsr_thresh = 0.1, factor = 0.5)
 saveRDS(m.pairwise_PM, paste0(mashr_path, "step5_pairwise_PM_", tissue, ".rds"))
 
-print(paste("✅ Analysis complete! Results for", tissue, "saved in:", mashr_path))
+print(paste("Analysis complete! Results for", tissue, "saved in:", mashr_path))

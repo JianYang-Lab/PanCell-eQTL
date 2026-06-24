@@ -210,6 +210,26 @@ if (!file.exists(paste0(mashr_path, "step4_strong_random_for_mash_", ct, ".rds")
 
     # Finalize mashR input object
     ncond <- ncol(df_random_all_slope_wide)
+
+    # STRICT OVERLAP FILTERING ------------------------------------------
+    print("Applying strict overlap filter: removing pairs with missing data in any condition...")
+    
+    # Identify rows where no condition has an SE of 1000 (meaning complete data)
+    strong_keep_idx <- rowSums(df_strong_all_se_wide[, 3:ncond, with=FALSE] == 1000) == 0
+    random_keep_idx <- rowSums(df_random_all_se_wide[, 3:ncond, with=FALSE] == 1000) == 0
+    
+    # Apply filter to strong set
+    df_strong_all_z_wide <- df_strong_all_z_wide[strong_keep_idx]
+    df_strong_all_slope_wide <- df_strong_all_slope_wide[strong_keep_idx]
+    df_strong_all_se_wide <- df_strong_all_se_wide[strong_keep_idx]
+    print(paste("Strong set: Retained", sum(strong_keep_idx), "out of", length(strong_keep_idx), "variants."))
+
+    # Apply filter to random set
+    df_random_all_z_wide <- df_random_all_z_wide[random_keep_idx]
+    df_random_all_slope_wide <- df_random_all_slope_wide[random_keep_idx]
+    df_random_all_se_wide <- df_random_all_se_wide[random_keep_idx]
+    print(paste("Random set: Retained", sum(random_keep_idx), "out of", length(random_keep_idx), "variants."))
+
     out <- list(
         random_pair = as.data.frame(df_random_all_z_wide)[, 1:2],
         random_z = as.data.frame(df_random_all_z_wide)[, 3:ncond],
@@ -241,7 +261,7 @@ data_STRONG <- mash_set_data(as.matrix(out$strong_b), as.matrix(out$strong_s), V
 
 # --- Step 4.2: Set up covariance matrices ---
 print("Step 4.2: Set up data-driven and canonical covariance matrices.")
-U.pca <- cov_pca(data_STRONG, 3)
+U.pca <- cov_pca(data_STRONG, 5)
 U.ed <- cov_ed(data_STRONG, U.pca)
 U.c <- cov_canonical(data_RANDOM)
 Ulist <- c(U.ed, U.c)
@@ -261,4 +281,4 @@ print("Step 4.5: Assess pairwise sharing.")
 m.pairwise_PM <- get_pairwise_sharing(m2, lfsr_thresh = 0.05, factor = 0.5)
 saveRDS(m.pairwise_PM, paste0(mashr_path, "step5_pairwise_PM_", ct, ".rds"))
 
-print(paste("✅ Analysis complete! Results for", ct, "saved in:", mashr_path))
+print(paste("Analysis complete! Results for", ct, "saved in:", mashr_path))
