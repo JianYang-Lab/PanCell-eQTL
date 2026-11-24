@@ -23,11 +23,11 @@ mkdir log
 conda activate celescope
 
 multi_rna \
-	--mapfile my.mapfile \ # mapfile
-	--genomeDir /path/to/ref/celescope/hs_ensembl_99 \ # Reference path
-	--thread 8 \ # threads
-	--mod shell \ # output file format
-	--outdir ${sample} # output path
+	--mapfile my.mapfile \
+	--genomeDir /path/to/ref/celescope/hs_ensembl_99 \
+	--thread 8 \
+	--mod shell \
+	--outdir ${sample}
 
 # Step 3: add sbatch parameters to bash scripts, then submit
 

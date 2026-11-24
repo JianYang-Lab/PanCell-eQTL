@@ -35,13 +35,13 @@ dir.create(output_dir, showWarnings = FALSE, recursive = TRUE)
 args <- commandArgs(TRUE)
 tissue <- args[1]
 bulk_name <- args[2]
-ancestry <- args[3]
+anc <- args[3]
 # --- Example for interactive use ---
 # tissue <- "Lung"
 # bulk_name <- "Lung"
 # ancestry <- "EUR"
 
-if (is.na(tissue) || is.na(bulk_name) || is.na(ancestry)) {
+if (is.na(tissue) || is.na(bulk_name) || is.na(anc)) {
     stop("Usage: Rscript script.R <tissue_name> <gtex_bulk_name> <ancestry>")
 }
 
@@ -155,13 +155,13 @@ bulk_eqtl <- load_bulk(bulk_path, bulk_name)
 # --- Step 3.2: Identify sc-eQTL cell types to process ---
 sceqtl_path <- file.path(base_dir, tissue, "sc-eQTL/results/sig/")
 summary_file <- file.path(sceqtl_path, "eQTL_summary_5en8.tsv")
-celltypes_to_process <- fread(summary_file)[ancestry == !!ancestry]$cell_type
+celltypes_to_process <- fread(summary_file)[ancestry == anc]$cell_type
 
-print(paste0("Found ", length(celltypes_to_process), " cell types to process for ", tissue, " in ", ancestry, " ancestry."))
+print(paste0("Found ", length(celltypes_to_process), " cell types to process for ", tissue, " in ", anc, " ancestry."))
 
 # --- Step 3.3: Match sc-eQTLs with Bulk Data for each cell type ---
 df_comb_list <- lapply(celltypes_to_process, function(ct) {
-    match_df_bulk(sceqtl_path, tissue, ancestry, ct, bulk_eqtl)
+    match_df_bulk(sceqtl_path, tissue, anc, ct, bulk_eqtl)
 })
 matched_sceqtl_bulk_dt <- rbindlist(df_comb_list)
 
@@ -170,7 +170,7 @@ matched_sceqtl_bulk <- list()
 matched_sceqtl_bulk[[tissue]] <- matched_sceqtl_bulk_dt
 
 # --- Step 3.4: Save the final matched data ---
-output_file <- file.path(output_dir, paste0("matched_sceqtl_bulk_", tissue, "_", ancestry, ".rds"))
+output_file <- file.path(output_dir, paste0("matched_sceqtl_bulk_", tissue, "_", anc, ".rds"))
 saveRDS(matched_sceqtl_bulk, output_file)
 
 print(paste("✅ Analysis complete. Matched data saved to:", output_file))

@@ -80,7 +80,7 @@ def load_and_process_samples(sample_names: List[str], root_dir: str, progress_ba
 def main():
     """Main function to execute the merging workflow."""
     # Parse command line arguments
-    if len(sys.argv) != 3
+    if len(sys.argv) != 3:
         print("Usage: python merge_samples.py <tissue> <samples_list_file>")
         sys.exit(1)
     

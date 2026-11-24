@@ -144,7 +144,7 @@ ancestries_all_list <- list(
   Skin = c("EUR", "EAS"), Colon = c("EUR"), Liver = c("EUR", "EAS")
 )
 celltypes_all_list = list(
-  Blood = c('CD4TNC','CD4TEM','Treg','CD4TEMRA','CD8TNC','CD8TRM','CD8TEMRA','MAIT','NKp','NKn','gdT','BIN','BMemNS','BMemS','Plasma','Plasmablasts','MonoC','MonoNC','DC1','DC2','Macro','Nph','pDC'),
+  Blood = c('CD4TNC','CD4TNCInf','CD4TEM','Treg','CD4TEMRA','CD8TNC','CD8TRM','CD8TEMRA','MAIT','gdT','NKp','NKn','BIN','BMemNS','BMemS','Plasma','Plasmablasts','MonoC','MonoInf','MonoNC','DC1','DC2','Macro','Nph','pDC','Eryth','HSPC','Platelet'),
   
   Lung = c("CD4TNC","CD4TEM","Treg","CD8TEMRA","CD8TEMTRM","CD8TRM","Tfh","NKp","NKn","NKCyc","BIN","BMem","Plasma","MonoC","MonoNC","Macro","MacroCyc","MacroInt","MacroAlv","Mast","DC1","DC2","MigDC","pDC","Eryth","Basal","Suprabasal","Ciliated","Club","Goblet","Ion","AT1","AT2","ECArt","AeroCap","ECCap","ECVenPulm","ECVenSys","LECdiff","LECmat","FibroAdv","FibroAlv","Myofibro","Pericyte","Meso"),
   

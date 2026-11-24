@@ -103,24 +103,19 @@ fi
 echo "Staging input VCF to local directory..."
 cp "${INPUT_VCF}" .
 
-# 2. Filter by Imputation R-squared (R2 > 0.3)
-echo "Step 2: Filtering by imputation R-squared > 0.3..."
-RSQ_VCF="merged_chr${CHR_ID}_rsq03.vcf.gz"
-bcftools view -i 'INFO/R2>0.3' "merged_chr${CHR_ID}.vcf.gz" \
-    -Oz -o "${RSQ_VCF}" --threads "${NUM_THREADS}"
-
-# 3. PLINK2 Filtering and BED file creation
-echo "Step 3: Filtering with PLINK2 (MAF, HWE, missingness)..."
-PLINK_OUT_PREFIX="merged_chr${CHR_ID}_filtered_rsq03"
+# 2. PLINK2 Filtering and BED file creation
+echo "Step 2: Filtering with PLINK2 (MAF, HWE, missingness)..."
+RSQ_VCF="merged_chr${CHR_ID}.vcf.gz"
+PLINK_OUT_PREFIX="merged_chr${CHR_ID}_filtered"
 plink2 --vcf "${RSQ_VCF}" \
-    --set-all-var-ids '@:#:$r:$a' --rm-dup exclude-all 'list' --new-id-max-allele-len 1000 \
+    --set-all-var-ids '@_#_$r_$a_b38' --rm-dup exclude-all 'list' --new-id-max-allele-len 1000 \
     --mind 0.01 --geno 0.01 --maf 0.01 --hwe 1e-6 \
     --double-id \
     --make-bed --threads "${NUM_THREADS}" \
     --out "${PLINK_OUT_PREFIX}"
 
-# 4. Copy Results Back
-echo "Step 4: Copying filtered PLINK files back to ${VCF_DIR}..."
+# 3. Copy Results Back
+echo "Step 3: Copying filtered PLINK files back to ${VCF_DIR}..."
 cp -v "${PLINK_OUT_PREFIX}".* "${VCF_DIR}/"
 
 echo "--- Session for chr${CHR_ID} completed successfully! ---"

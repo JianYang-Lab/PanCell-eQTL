@@ -41,19 +41,20 @@ suppressMessages({
   library(data.table);
   library(parallel)
 })
-source(opt$R_functions) 
 if (!file.exists(opt$R_functions)) {
   stop("R_functions file does not exist. Please provide a valid path.")
 }
+source(opt$R_functions)
 # Check required options
-if (is.na(opt$sumstats) || is.na(opt$besd) || is.na(opt$QTLName) || is.na(opt$QTLN) || is.na(opt$expr_bed) || is.na(opt$SMR) || is.na(opt$tmp_dirt)) {
-  stop("Please provide all required options: --sumstats, --besd, --QTLName, --QTLN, --expr_bed, --SMR, --tmp_dirt")
+if (is.na(opt$sumstats) || is.na(opt$besd) || is.na(opt$QTLName) || is.na(opt$QTLN) || is.na(opt$expr_bed) || is.na(opt$SMR) || is.na(opt$tmp_dirt) || is.na(opt$chr) || is.na(opt$out)) {
+  stop("Please provide all required options: --sumstats, --besd, --QTLName, --QTLN, --expr_bed, --SMR, --tmp_dirt, --chr, --out")
 }   
 if (!file.exists(opt$sumstats)) {
   stop("Summary statistics file does not exist. Please provide a valid path.")
 }
-if (!file.exists(opt$besd)) {
-  stop("QTL summary data file does not exist. Please provide a valid path.")
+besd_files <- paste0(opt$besd, c(".besd", ".esi", ".epi"))
+if (any(!file.exists(besd_files))) {
+  stop("Missing BESD component(s): ", paste(besd_files[!file.exists(besd_files)], collapse = ", "))
 }
 if (!file.exists(opt$expr_bed)) {
   stop("Expression bed file does not exist. Please provide a valid path.")
@@ -65,6 +66,15 @@ if (!file.exists(opt$SMR)) {
 SMR = opt$SMR
 tmp_dirt = opt$tmp_dirt
 dir.create(paste0(tmp_dirt,"/query"), recursive=TRUE, showWarnings=FALSE)
+
+run_smr <- function(args, expected_file) {
+  if (file.exists(expected_file) && !file.remove(expected_file)) {
+    stop("Cannot remove stale SMR output: ", expected_file)
+  }
+  status <- system2(SMR, shQuote(args))
+  if (status != 0L) stop("SMR exited with status ", status, " for ", expected_file)
+  if (!file.exists(expected_file)) stop("SMR did not produce ", expected_file)
+}
 
 # ------------------ GWAS Input Treatment ---------------------
 gwas = fread(opt$sumstats, head=TRUE, stringsAsFactors=FALSE, data.table=FALSE)
@@ -83,19 +93,22 @@ if (sum(is.na(gwas$N)) > 0){
 }
 
 # ------------------ QTL Input Treatment ---------------------
-if (!opt$perm){
-  command1 = paste0(SMR, " --beqtl-summary ", opt$besd, " --chr ", opt$chr, " --descriptive-cis --out ", tmp_dirt, "/query/", opt$QTLName, "_chr", opt$chr)
-  system(command1)
-  qtl = fread(paste0(tmp_dirt, "/query/", opt$QTLName, "_chr", opt$chr, ".cis.summary.txt"), head=TRUE, stringsAsFactors=FALSE, data.table=FALSE)
-  qtl = qtl[qtl$Probe_Chr == opt$chr, ]
-  if (!is.null(opt$probe_path) && file.exists(opt$probe_path)) {
-    pbs = fread(opt$probe_path, header=FALSE, stringsAsFactors=FALSE)$V1
-  } else {
-    pbs = unique(qtl$Probe)
-  }
-} else {
-  snp_pbs = fread(opt$probe_path, header=FALSE, stringsAsFactors=FALSE, data.table=FALSE)
-  pbs = unique(snp_pbs[,2])
+epi <- fread(paste0(opt$besd, ".epi"), header = FALSE, select = 1:2, colClasses = "character")
+pbs <- unique(epi$V2[epi$V1 == opt$chr])
+if (!opt$perm && length(pbs)) {
+  prefix <- file.path(tmp_dirt, "query", paste0(opt$QTLName, "_chr", opt$chr))
+  cis_file <- paste0(prefix, ".cis.summary.txt")
+  run_smr(c("--beqtl-summary", opt$besd, "--chr", opt$chr, "--descriptive-cis", "--out", prefix), cis_file)
+  qtl <- fread(cis_file, header = TRUE)
+  if (!all(c("Probe", "Probe_Chr") %in% names(qtl))) stop("Invalid SMR cis summary: ", cis_file)
+  pbs <- intersect(pbs, qtl$Probe[qtl$Probe_Chr == opt$chr])
+}
+if (opt$perm || !is.na(opt$probe_path)) {
+  if (!file.exists(opt$probe_path)) stop("Missing probe list: ", opt$probe_path)
+  column <- if (opt$perm) 2L else 1L
+  requested <- if (file.size(opt$probe_path) == 0L) character() else
+    fread(opt$probe_path, header = FALSE, select = column, colClasses = "character")[[1L]]
+  pbs <- intersect(pbs, requested)
 }
 
 bed = fread(opt$expr_bed, header=TRUE, stringsAsFactors=FALSE, data.table=FALSE)
@@ -103,27 +116,24 @@ bed = bed[bed$TargetID %in% pbs, ]
 
 # ------------------ Coloc Analysis in Parallel ------------------------
 
+empty_result <- data.frame(probe_name = character(), gene_name = character(),
+                           pp0 = numeric(), pp1 = numeric(), pp2 = numeric(),
+                           pp3 = numeric(), pp4 = numeric())
 process_probe <- function(probe) {
   tryCatch({
     # Query SNPs based on the probe
     query_output = paste0(tmp_dirt, "/query/", opt$QTLName, "_", probe, ".query")
-    command = paste0(
-      SMR, " --beqtl-summary ", opt$besd,
-      " --query 1 --probe ", probe,
-      " --out ", query_output
-    )
-    system(command)
-    
     query_file = paste0(query_output, ".txt")
-    if (!file.exists(query_file)) {
-      message("Query file not found for probe ", probe, ". Skipping.")
-      return(NULL)
-    }
+    run_smr(c("--beqtl-summary", opt$besd, "--query", "1", "--probe", probe,
+              "--out", query_output), query_file)
     
     # Read and filter query results
     query = fread(query_file, head=TRUE, stringsAsFactors=FALSE, data.table=FALSE)
+    if (!all(c("SNP", "Gene", "A1", "A2", "Freq", "b", "SE", "p") %in% names(query))) {
+      stop("Invalid SMR query table: ", query_file)
+    }
     query = query[query$SE != 0, ]
-    if (nrow(query) == 0) return(NULL)
+    if (nrow(query) == 0) return(empty_result)
     
     # Extract gene name
     gene_name = query$Gene[1]
@@ -131,7 +141,7 @@ process_probe <- function(probe) {
     # Match query SNPs with GWAS data
     matched_indices = match(query$SNP, gwas$SNP)
     valid_indices = which(!is.na(matched_indices))
-    if (length(valid_indices) < 10) return(NULL)
+    if (length(valid_indices) < 10) return(empty_result)
     
     query_com = query[valid_indices, ]
     gwas_com = gwas[matched_indices[valid_indices], ]
@@ -155,7 +165,7 @@ process_probe <- function(probe) {
 
     # Remove SNPs where alleles do not match
     allele_match = which((query_com$A1 == gwas_com$A1) & (query_com$A2 == gwas_com$A2))
-    if (length(allele_match) < 10) return(NULL)
+    if (length(allele_match) < 10) return(empty_result)
     
     query_com = query_com[allele_match, ]
     gwas_com = gwas_com[allele_match, ]
@@ -228,7 +238,7 @@ process_probe <- function(probe) {
     data1 = data1[valid_indices, ]
     data2 = data2[valid_indices, ]
 
-    if (nrow(data1) < 10) return(NULL)
+    if (nrow(data1) < 10) return(empty_result)
     data1 = as.list(data1)
     data2 = as.list(data2)
     data1$sdY = sdY
@@ -258,8 +268,7 @@ process_probe <- function(probe) {
     
     return(res)
   }, error = function(e) {
-    message("Error processing probe ", probe, ": ", conditionMessage(e))
-    return(NULL)
+    simpleError(paste0("Error processing probe ", probe, ": ", conditionMessage(e)))
   })
 }
 
@@ -270,9 +279,13 @@ if (numCores < 1) numCores = 1  # Ensure at least one core is used
 # Run the analysis in parallel
 results_list = mclapply(pbs, process_probe, mc.cores = numCores)
 
-# Combine results while removing NULLs
-results_list = results_list[!sapply(results_list, is.null)]
-summary = do.call(rbind, results_list)
+# Forked worker errors must fail the chromosome before any result is published.
+for (i in seq_along(results_list)) {
+  result <- results_list[[i]]
+  if (inherits(result, "error")) stop(conditionMessage(result), call. = FALSE)
+  if (!is.data.frame(result)) stop("Worker did not return a result for probe ", pbs[i])
+}
+summary = do.call(rbind, c(list(empty_result), results_list))
 
 # Append or write results
 output_file = paste0(opt$out, ".coloc")

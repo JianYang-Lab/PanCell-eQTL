@@ -14,7 +14,8 @@ from datetime import datetime
 import pandas as pd
 import torch
 import tensorqtl
-from tensorqtl import genotypeio, cis, susie
+from tensorqtl import genotypeio, susie
+import pancell_cis as cis
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 print(f"torch: {torch.__version__} (CUDA {torch.version.cuda}), device: {device}")
 print(f"pandas {pd.__version__}")
@@ -129,13 +130,13 @@ if __name__=='__main__':
         print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed eQTL mapping for {ancestry}_{celltype}_{pc_num}', flush=True)
 
         # Conditional analysis
-        indep_df = cis.map_independent(genotype_df, variant_df, cis_df,
+        indep_df = cis.map_independent_5en8(genotype_df, variant_df, cis_df,
                                         phenotype_df, phenotype_pos_df, covariates_df, maf_threshold=0.01)
         indep_df.to_csv(f"{prefix}_indep.tsv", sep='\t', index=False)
         print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed conditional eQTL mapping for {ancestry}_{celltype}_{pc_num}', flush=True)
 
         # Conditional analysis GTEx version
-        indep_df = cis.map_independent_old(genotype_df, variant_df, cis_df,
+        indep_df = cis.map_independent(genotype_df, variant_df, cis_df,
                                         phenotype_df, phenotype_pos_df, covariates_df, maf_threshold=0.01)
         indep_df.to_csv(f"{prefix}_indep_gtex.tsv", sep='\t', index=False)
         print('['+datetime.now().strftime("%b %d %H:%M:%S")+f'] Completed conditional eQTL mapping (GTEx) for {ancestry}_{celltype}_{pc_num}', flush=True)

@@ -50,7 +50,7 @@ chrom <- as.numeric(args[2])
 if (is.na(ct) || is.na(chrom)) {
   stop("Cell type or chromosome not provided. Usage: Rscript script.R <cell_type> <chromosome>")
 }
-print(paste0("🔬 Applying mashR model to ", ct, " on chromosome ", chrom))
+print(paste0("Applying mashR model to ", ct, " on chromosome ", chrom))
 
 # Define the list of tissues and the ancestry to analyze
 tissue_list <- c("Blood", "Lung", "Skin", "Colon", "Liver")
@@ -192,7 +192,7 @@ if (!file.exists(summary_stats_file)) {
 print("Step 4.1: Setting up data for mashR.")
 
 # Load the previously fitted mash model
-fitted_model_file <- file.path(mashr_dir, paste0("step_mash_fit_", ct, ".rds"))
+fitted_model_file <- file.path(mashr_dir, paste0("step5_m_", ct, ".rds"))
 if (!file.exists(fitted_model_file)) {
     stop("Fitted mash model not found. Please run the model training script first.")
 }

@@ -32,12 +32,6 @@ usage() {
 }
 
 # --- Configuration & Argument Parsing ---
-
-# Static paths for software and reference data
-MINIMAC4_EXEC="/path/to/SOFTWARE/Minimac4/bin/minimac4"
-REF_PATH="/path/to/resource/1000genomes/minimac_ref"
-OUTPUT_DIR="/path/to/${tissue}/VCF_1KGimputed/VCF_persample"
-
 # Parse command-line arguments
 if [ "$#" -eq 0 ]; then
     usage
@@ -52,6 +46,11 @@ while [ "$#" -gt 0 ]; do
         *)          echo "Unknown option: $1" >&2; usage;;
     esac
 done
+
+# Static paths for software and reference data
+MINIMAC4_EXEC="/path/to/SOFTWARE/Minimac4/bin/minimac4"
+REF_PATH="/path/to/resource/1000genomes/minimac_ref"
+OUTPUT_DIR="/path/to/${tissue}/VCF_1KGimputed/VCF_persample"
 
 # Check if all required arguments were provided
 if [ -z "${tissue:-}" ] || [ -z "${project_id:-}" ] || [ -z "${sample_name:-}" ]; then

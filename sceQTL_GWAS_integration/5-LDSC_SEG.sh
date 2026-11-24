@@ -36,21 +36,10 @@ echo " Processing Cell Type: ${CT}"
 echo "----------------------------------------------------------"
     
 EQTL_FILE="${EQTL_DIR}/${TISSUE}_${CT}_EUR_sceQTL_query.txt"
-GENESET="${OUT_DIR}/annotations_fdr05/${CT}.GeneSet"
-    
+GENESET="${OUT_DIR}/annotations_deg/${CT}.GeneSet"
+
 # --------------------------------------------------------------------------
-# Step 2: Extract Significant eGenes
-# --------------------------------------------------------------------------
-# Columns: 1:SNP 2:Chr 3:BP 4:A1 5:A2 6:Freq 7:Probe 8:Probe_Chr 9:Probe_bp 
-#          10:Gene 11:Orientation 12:b 13:se 14:p
-if [ ! -f ${GENESET} ]; then
-    awk -v thresh=${PVAL_THRESH} 'NR>1 && $14 < thresh {print $7}' ${EQTL_FILE} | sort | uniq > ${GENESET}
-fi
-GENE_COUNT=$(wc -l < ${GENESET})
-echo "Extracted ${GENE_COUNT} significant eGenes for ${CT}."
-    
-# --------------------------------------------------------------------------
-# Step 3: Make Annotations and Compute LD Scores (Loop over chromosomes)
+# Make Annotations and Compute LD Scores (Loop over chromosomes)
 # --------------------------------------------------------------------------
 # Standard SEG window is 100kb around the gene boundary
 JOB_IDS=()
@@ -80,7 +69,6 @@ for CHR in {1..22}; do
 done
 
 # CRITICAL: Wait for all qsubshcom jobs submitted by this session to finish
-# Note: Ensure your local environment's 'wait' or a specific check loop is used.
 # Since qsubshcom usually returns immediately, we check for file completion:
 
 echo "Waiting for all chromosome jobs to complete..."
@@ -108,7 +96,7 @@ fi
 echo "LD Scores computed for ${CT}."
 
 # --------------------------------------------------------------------------
-# Step 4: Partition Heritability
+# Partition Heritability
 # --------------------------------------------------------------------------
 # We test your custom annotation *jointly* with the baseline v2.2 model 
 # to control for general genomic architectures (like coding regions, enhancers, etc).
